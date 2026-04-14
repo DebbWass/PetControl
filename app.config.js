@@ -1,0 +1,63 @@
+module.exports = {
+  expo: {
+    name: "PetControl",
+    slug: "petcontrol",
+    version: "1.2.0",
+    orientation: "portrait",
+    icon: "./assets/icon.png",
+    userInterfaceStyle: "automatic",
+    scheme: "petcontrol",
+    newArchEnabled: true,
+    splash: {
+      image: "./assets/splash-icon.png",
+      resizeMode: "contain",
+      backgroundColor: "#4CAF50",
+    },
+    android: {
+      adaptiveIcon: {
+        foregroundImage: "./assets/adaptive-icon.png",
+        backgroundColor: "#4CAF50",
+      },
+      edgeToEdgeEnabled: true,
+      package: "com.petcontrol.app",
+      versionCode: 2,
+      // Locally uses ./google-services.json; on EAS the secret file path is injected via env var
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json",
+      permissions: [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECORD_AUDIO",
+      ],
+    },
+    plugins: [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/notification-icon.png",
+          color: "#4CAF50",
+          defaultChannel: "default",
+        },
+      ],
+      [
+        "expo-image-picker",
+        {
+          photosPermission:
+            "PetControl צריכה גישה לתמונות כדי להגדיר תמונת פרופיל לחיה שלך.",
+        },
+      ],
+    ],
+    experiments: {
+      typedRoutes: true,
+    },
+    extra: {
+      router: {},
+      eas: {
+        projectId: "839f8708-f8f8-4393-a630-c79c0a33dd41",
+      },
+    },
+  },
+};
