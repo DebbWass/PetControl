@@ -90,7 +90,15 @@
     "noMedications": "אין תרופות פעילות",
     "active": "פעיל",
     "inactive": "לא פעיל",
-    "markGiven": "סמן כניתנה"
+    "markGiven": "סמן כניתנה",
+    "frequencyValue": "כל כמה",
+    "daily": "יומי",
+    "hours": "שעות",
+    "weekly": "שבועי",
+    "monthly": "חודשי",
+    "as_needed": "לפי הצורך",
+    "reminderEnabled": "הפעל תזכורת",
+    "reminderTimeLabel": "שעת תזכורת (HH:MM)"
   },
   "vaccines": {
     "title": "חיסונים",
@@ -103,7 +111,10 @@
     "batchNumber": "מספר אצווה",
     "reminder": "תזכורת",
     "reminderDays": "ימים לפני",
-    "noVaccines": "עדיין אין חיסונים"
+    "noVaccines": "עדיין אין חיסונים",
+    "selectVaccine": "בחר חיסון",
+    "customName": "שם חיסון (ידני)",
+    "manualNextDue": "תאריך הבא (DD/MM/YYYY)"
   },
   "treatments": {
     "title": "טיפולים",
@@ -155,7 +166,8 @@
     "notes": "הערות",
     "history": "היסטוריית האכלה",
     "noRecords": "עדיין אין רשומות מזון",
-    "todayTotal": "סה\"כ היום"
+    "todayTotal": "סה\"כ היום",
+    "weeklyChart": "צריכה שבועית"
   },
   "reminders": {
     "title": "תזכורות",
@@ -189,7 +201,15 @@
     "family": "המשפחה שלי",
     "inviteCode": "קוד הזמנה",
     "about": "אודות",
-    "version": "גרסה"
+    "version": "גרסה",
+    "restartRequired": "נדרש אתחול",
+    "restartMessage": "שינוי השפה ייכנס לתוקף לאחר אתחול האפליקציה.",
+    "restart": "אתחל עכשיו",
+    "notifications": "התראות",
+    "medications_notif": "תרופות",
+    "vaccines_notif": "חיסונים",
+    "treatments_notif": "טיפולים",
+    "appointments_notif": "תורים"
   },
   "common": {
     "save": "שמור",

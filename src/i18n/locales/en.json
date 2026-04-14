@@ -90,7 +90,15 @@
     "noMedications": "No active medications",
     "active": "Active",
     "inactive": "Inactive",
-    "markGiven": "Mark as Given"
+    "markGiven": "Mark as Given",
+    "frequencyValue": "Every",
+    "daily": "Daily",
+    "hours": "Hours",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "as_needed": "As Needed",
+    "reminderEnabled": "Enable Reminder",
+    "reminderTimeLabel": "Reminder Time (HH:MM)"
   },
   "vaccines": {
     "title": "Vaccines",
@@ -103,7 +111,10 @@
     "batchNumber": "Batch Number",
     "reminder": "Reminder",
     "reminderDays": "Days Before",
-    "noVaccines": "No vaccines yet"
+    "noVaccines": "No vaccines yet",
+    "selectVaccine": "Select Vaccine",
+    "customName": "Vaccine Name (manual)",
+    "manualNextDue": "Next Due Date (DD/MM/YYYY)"
   },
   "treatments": {
     "title": "Treatments",
@@ -155,7 +166,8 @@
     "notes": "Notes",
     "history": "Feeding History",
     "noRecords": "No food records yet",
-    "todayTotal": "Today's Total"
+    "todayTotal": "Today's Total",
+    "weeklyChart": "Weekly Intake"
   },
   "reminders": {
     "title": "Reminders",
@@ -189,7 +201,10 @@
     "family": "My Family",
     "inviteCode": "Invite Code",
     "about": "About",
-    "version": "Version"
+    "version": "Version",
+    "restartRequired": "Restart Required",
+    "restartMessage": "Language change takes effect after restarting the app.",
+    "restart": "Restart Now"
   },
   "common": {
     "save": "Save",

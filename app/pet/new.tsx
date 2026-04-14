@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
-import { Text, TextInput, Button, HelperText, SegmentedButtons, Menu, Divider } from 'react-native-paper';
+import { View, ScrollView, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import { Text, TextInput, Button, HelperText, SegmentedButtons, Menu, ActivityIndicator } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
-import { Timestamp } from 'firebase/firestore';
-import { addPet } from '../../src/services/firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import { addPet, updatePet } from '../../src/services/firebase/firestore';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_LIST } from '../../src/constants/species';
 import { Species, Sex } from '../../src/types';
+import { uploadPetPhoto } from '../../src/services/storage';
 
 export default function NewPetScreen() {
   const { t, i18n } = useTranslation();
@@ -21,11 +22,24 @@ export default function NewPetScreen() {
   const [sex, setSex] = useState<Sex>('unknown');
   const [color, setColor] = useState('');
   const [isNeutered, setIsNeutered] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [speciesMenuVisible, setSpeciesMenuVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const selectedSpecies = SPECIES_LIST.find((s) => s.key === species);
+
+  async function handlePickPhoto() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -37,7 +51,7 @@ export default function NewPetScreen() {
     setLoading(true);
     setError('');
     try {
-      await addPet(user.familyId, {
+      const petId = await addPet(user.familyId, {
         familyId: user.familyId,
         name: name.trim(),
         species,
@@ -48,6 +62,12 @@ export default function NewPetScreen() {
         isActive: true,
         createdBy: user.uid,
       });
+
+      if (photoUri) {
+        const photoUrl = await uploadPetPhoto(user.familyId, petId, photoUri);
+        await updatePet(user.familyId, petId, { photoUrl });
+      }
+
       router.back();
     } catch (e: any) {
       setError(e.message ?? t('common.error'));
@@ -59,6 +79,18 @@ export default function NewPetScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text variant="headlineMedium" style={styles.title}>{t('pets.addPet')}</Text>
+
+      {/* Photo picker */}
+      <TouchableOpacity onPress={handlePickPhoto} style={styles.photoContainer}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+        ) : (
+          <View style={styles.photoPlaceholder}>
+            <Text style={styles.photoEmoji}>📷</Text>
+            <Text style={styles.photoLabel}>{t('pets.addPhoto')}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
 
       {/* Name */}
       <TextInput
@@ -163,6 +195,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16, paddingBottom: 40 },
   title: { marginBottom: 16 },
+  photoContainer: { alignSelf: 'center', marginBottom: 20 },
+  photoPreview: { width: 100, height: 100, borderRadius: 50 },
+  photoPlaceholder: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: Colors.border,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  photoEmoji: { fontSize: 28 },
+  photoLabel: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center', marginTop: 2 },
   input: { marginBottom: 12 },
   label: { marginBottom: 4, marginTop: 8, color: Colors.textSecondary },
   segment: { marginBottom: 16 },

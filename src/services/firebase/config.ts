@@ -18,12 +18,12 @@ import { getStorage } from 'firebase/storage';
  * Use a .env.local file and process.env, or replace these strings locally.
  */
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-  messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyCgkY_lgpYP_65RTJ2SwzfFQFlY2uF8GM8',
+  authDomain: 'petcontrol-ac39f.firebaseapp.com',
+  projectId: 'petcontrol-ac39f',
+  storageBucket: 'petcontrol-ac39f.firebasestorage.app',
+  messagingSenderId: '429584450443',
+  appId: '1:429584450443:web:1eef23b404a321d692e58e',
 };
 
 // Prevent duplicate initialization in Expo hot-reload

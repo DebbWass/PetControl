@@ -1,4 +1,4 @@
-import { View, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, ScrollView, StyleSheet, Alert, Image } from 'react-native';
 import { Text, Card, Button, Divider, Chip, FAB, IconButton } from 'react-native-paper';
 import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -67,7 +67,11 @@ export default function PetDetailScreen() {
         {/* Header card */}
         <Card style={styles.headerCard}>
           <Card.Content style={styles.headerContent}>
-            <Text style={styles.petEmoji}>{speciesInfo?.emoji ?? '🐾'}</Text>
+            {pet.photoUrl ? (
+              <Image source={{ uri: pet.photoUrl }} style={styles.petPhoto} />
+            ) : (
+              <Text style={styles.petEmoji}>{speciesInfo?.emoji ?? '🐾'}</Text>
+            )}
             <Text variant="headlineMedium">{pet.name}</Text>
             <Text variant="bodyMedium" style={styles.speciesText}>
               {isHe ? speciesInfo?.labelHe : speciesInfo?.labelEn}
@@ -120,6 +124,7 @@ const styles = StyleSheet.create({
   headerCard: { marginBottom: 16 },
   headerContent: { alignItems: 'center', paddingVertical: 16 },
   petEmoji: { fontSize: 64, marginBottom: 8 },
+  petPhoto: { width: 100, height: 100, borderRadius: 50, marginBottom: 8 },
   speciesText: { color: Colors.textSecondary, marginTop: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 6 },
   chip: { backgroundColor: Colors.primaryLight },
