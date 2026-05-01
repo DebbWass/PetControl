@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Text, TextInput, Button, HelperText } from 'react-native-paper';
+import { useState, useEffect } from 'react';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { Text, TextInput, Button, HelperText, Checkbox } from 'react-native-paper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import { loginUser } from '../../src/services/firebase/auth';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
+
+const CREDENTIALS_KEY = '@petcontrol_credentials';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
@@ -16,6 +19,22 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    AsyncStorage.getItem(CREDENTIALS_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (saved?.remember) {
+          setEmail(saved.email ?? '');
+          setPassword(saved.password ?? '');
+          setRememberMe(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleLogin() {
     if (!email || !password) {
@@ -27,6 +46,17 @@ export default function LoginScreen() {
     try {
       const user = await loginUser(email.trim(), password);
       setUser(user);
+
+      // Persist or clear credentials
+      if (rememberMe) {
+        await AsyncStorage.setItem(
+          CREDENTIALS_KEY,
+          JSON.stringify({ email: email.trim(), password, remember: true })
+        );
+      } else {
+        await AsyncStorage.removeItem(CREDENTIALS_KEY);
+      }
+
       router.replace('/(tabs)/');
     } catch (e: any) {
       setError(e.message ?? t('common.error'));
@@ -35,9 +65,12 @@ export default function LoginScreen() {
     }
   }
 
+  const { width } = useWindowDimensions();
+  const isWideScreen = Platform.OS === 'web' && width > 600;
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, isWideScreen && styles.containerWide]}>
         <Text variant="displaySmall" style={styles.logo}>🐾</Text>
         <Text variant="headlineMedium" style={styles.title}>
           {t('app.name')}
@@ -72,6 +105,22 @@ export default function LoginScreen() {
 
         {error ? <HelperText type="error">{error}</HelperText> : null}
 
+        {/* Remember Me */}
+        <View style={styles.rememberRow}>
+          <Checkbox
+            status={rememberMe ? 'checked' : 'unchecked'}
+            onPress={() => setRememberMe((v) => !v)}
+            color={Colors.primary}
+          />
+          <Text
+            variant="bodyMedium"
+            style={styles.rememberLabel}
+            onPress={() => setRememberMe((v) => !v)}
+          >
+            {t('auth.rememberMe')}
+          </Text>
+        </View>
+
         <Button
           mode="contained"
           onPress={handleLogin}
@@ -95,17 +144,30 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
+  flex: { flex: 1, backgroundColor: Colors.background },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 24,
     backgroundColor: Colors.background,
   },
+  containerWide: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 420,
+  },
   logo: { textAlign: 'center', marginBottom: 8 },
   title: { textAlign: 'center', marginBottom: 4 },
   subtitle: { textAlign: 'center', color: Colors.textSecondary, marginBottom: 32 },
   input: { marginBottom: 12 },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  rememberLabel: {
+    color: Colors.textSecondary,
+  },
   button: { marginTop: 8, borderRadius: 8 },
   linkButton: { marginTop: 8 },
 });

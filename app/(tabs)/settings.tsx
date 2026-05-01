@@ -1,4 +1,4 @@
-import { View, StyleSheet, Alert } from 'react-native';
+import { View, StyleSheet, Alert, Share } from 'react-native';
 import { Text, List, Switch, Divider, Button } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
@@ -39,7 +39,6 @@ export default function SettingsScreen() {
           text: t('common.cancel'),
           style: 'cancel',
           onPress: () => {
-            // Revert to current language if user cancels
             setIsHebrew(!val);
           },
         },
@@ -69,12 +68,28 @@ export default function SettingsScreen() {
     );
   }
 
+  async function handleShareCode() {
+    const code = family?.inviteCode;
+    if (!code) return;
+    try {
+      await Share.share({
+        message: i18n.language === 'he'
+          ? `הצטרף למשפחה שלי ב-PetControl! קוד הזמנה: ${code}`
+          : `Join my family on PetControl! Invite code: ${code}`,
+      });
+    } catch {
+      // user cancelled share
+    }
+  }
+
   const notifItems: { key: 'medications' | 'vaccines' | 'treatments' | 'appointments'; labelKey: string }[] = [
     { key: 'medications', labelKey: 'settings.medications_notif' },
     { key: 'vaccines', labelKey: 'settings.vaccines_notif' },
     { key: 'treatments', labelKey: 'settings.treatments_notif' },
     { key: 'appointments', labelKey: 'settings.appointments_notif' },
   ];
+
+  const inviteCode = family?.inviteCode ?? null;
 
   return (
     <View style={styles.container}>
@@ -115,13 +130,32 @@ export default function SettingsScreen() {
 
       <Divider />
 
-      {/* Family */}
+      {/* Family & Invite Code */}
       <List.Section>
         <List.Subheader>{t('settings.family')}</List.Subheader>
-        {user?.familyId && (
+        {inviteCode ? (
+          <>
+            <List.Item
+              title={t('settings.inviteCode')}
+              description={inviteCode}
+              left={(props) => <List.Icon {...props} icon="qrcode" />}
+            />
+            <View style={styles.shareContainer}>
+              <Button
+                mode="contained"
+                icon="share-variant"
+                onPress={handleShareCode}
+                buttonColor={Colors.primary}
+                style={styles.shareButton}
+              >
+                {t('settings.shareCode')}
+              </Button>
+            </View>
+          </>
+        ) : (
           <List.Item
             title={t('settings.inviteCode')}
-            description={family?.inviteCode ?? '------'}
+            description="------"
             left={(props) => <List.Icon {...props} icon="qrcode" />}
           />
         )}
@@ -146,6 +180,8 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   title: { padding: 16, paddingBottom: 8 },
+  shareContainer: { paddingHorizontal: 16, paddingBottom: 8 },
+  shareButton: { borderRadius: 8 },
   logoutContainer: { padding: 16, marginTop: 16 },
   logoutButton: { borderColor: Colors.danger },
 });

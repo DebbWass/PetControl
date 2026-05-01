@@ -18,6 +18,7 @@ import {
   getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
+
 import { auth, db } from './config';
 import { AppUser, Family, NotificationPrefs } from '../../types';
 
@@ -71,49 +72,61 @@ export async function registerAndCreateFamily(
     updatedAt: serverTimestamp(),
   };
   await setDoc(doc(db, 'families', familyId, 'members', uid), user);
+  await setDoc(doc(db, 'users', uid), { familyId });
 
   return { ...user, createdAt: new Date() as any, updatedAt: new Date() as any };
 }
 
-/** Register a new user and join an existing Family via invite code */
+/** Register a new user and join an existing Family via invite code.
+ *  Auth account is created first so the invite-code query runs authenticated
+ *  (Firestore rules require authentication to query families).
+ *  If joining fails the auth account is cleaned up automatically. */
 export async function registerAndJoinFamily(
   email: string,
   password: string,
   displayName: string,
   inviteCode: string
 ): Promise<AppUser> {
-  // Find family by invite code
-  const q = query(collection(db, 'families'), where('inviteCode', '==', inviteCode.toUpperCase()));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
-    throw new Error('INVALID_INVITE_CODE');
-  }
-  const familyDoc = snapshot.docs[0];
-  const familyId = familyDoc.id;
-
+  // 1. Create auth account first so subsequent Firestore queries are authenticated
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   const { uid } = credential.user;
   await updateProfile(credential.user, { displayName });
 
-  // Add uid to family memberUids
-  await updateDoc(doc(db, 'families', familyId), {
-    memberUids: arrayUnion(uid),
-  });
+  try {
+    // 2. Find family by invite code (now authenticated)
+    const q = query(collection(db, 'families'), where('inviteCode', '==', inviteCode.toUpperCase()));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+      throw new Error('INVALID_INVITE_CODE');
+    }
+    const familyDoc = snapshot.docs[0];
+    const familyId = familyDoc.id;
 
-  const user: Omit<AppUser, 'createdAt' | 'updatedAt'> & { createdAt: any; updatedAt: any } = {
-    uid,
-    email,
-    displayName,
-    familyId,
-    role: 'member',
-    fcmTokens: [],
-    notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-  await setDoc(doc(db, 'families', familyId, 'members', uid), user);
+    // 3. Add uid to family memberUids
+    await updateDoc(doc(db, 'families', familyId), {
+      memberUids: arrayUnion(uid),
+    });
 
-  return { ...user, createdAt: new Date() as any, updatedAt: new Date() as any };
+    const user: Omit<AppUser, 'createdAt' | 'updatedAt'> & { createdAt: any; updatedAt: any } = {
+      uid,
+      email,
+      displayName,
+      familyId,
+      role: 'member',
+      fcmTokens: [],
+      notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(doc(db, 'families', familyId, 'members', uid), user);
+    await setDoc(doc(db, 'users', uid), { familyId });
+
+    return { ...user, createdAt: new Date() as any, updatedAt: new Date() as any };
+  } catch (e) {
+    // Clean up the dangling auth account so the user can try again
+    await credential.user.delete().catch(() => {});
+    throw e;
+  }
 }
 
 /** Sign in existing user and load their AppUser profile */
@@ -122,20 +135,13 @@ export async function loginUser(email: string, password: string): Promise<AppUse
   return loadUserProfile(credential.user);
 }
 
-/** Load AppUser profile from Firestore. Searches all families for the user's member doc. */
+/** Load AppUser profile from Firestore using the top-level users/{uid} index. */
 export async function loadUserProfile(firebaseUser: User): Promise<AppUser> {
-  // We need to find which family this user belongs to.
-  // We store familyId in the member doc, but we need to find the member doc first.
-  // Strategy: query families where memberUids contains uid
-  const q = query(
-    collection(db, 'families'),
-    where('memberUids', 'array-contains', firebaseUser.uid)
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) {
+  const userIndexSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+  if (!userIndexSnap.exists()) {
     throw new Error('USER_NOT_IN_ANY_FAMILY');
   }
-  const familyId = snapshot.docs[0].id;
+  const { familyId } = userIndexSnap.data() as { familyId: string };
   const memberSnap = await getDoc(
     doc(db, 'families', familyId, 'members', firebaseUser.uid)
   );
@@ -143,6 +149,13 @@ export async function loadUserProfile(firebaseUser: User): Promise<AppUser> {
     throw new Error('MEMBER_DOC_NOT_FOUND');
   }
   return { ...memberSnap.data(), uid: firebaseUser.uid } as AppUser;
+}
+
+/** Load Family document from Firestore */
+export async function loadFamily(familyId: string): Promise<Family | null> {
+  const snap = await getDoc(doc(db, 'families', familyId));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as Family;
 }
 
 export function logout() {

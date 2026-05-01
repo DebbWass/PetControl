@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat \"D:/AI_Agents/PetControl/docs/\"*.md)",
+      "Bash(npx expo:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const m = require\\('expo-image-picker'\\); console.log\\(Object.keys\\(m\\).includes\\('MediaTypeOptions'\\) ? 'ok' : 'missing MediaTypeOptions'\\)\")",
+      "Bash(gcloud projects:*)",
+      "Bash(npx jest:*)"
+    ]
+  }
+}

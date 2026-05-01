@@ -7,6 +7,7 @@
     "home": "Home",
     "pets": "Pets",
     "reminders": "Reminders",
+    "ai": "AI",
     "settings": "Settings"
   },
   "auth": {
@@ -20,7 +21,8 @@
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "logout": "Logout",
-    "forgotPassword": "Forgot password"
+    "forgotPassword": "Forgot password",
+    "rememberMe": "Remember me"
   },
   "family": {
     "create": "Create Family",
@@ -57,7 +59,10 @@
     "age": "Age",
     "years": "years",
     "months": "months",
-    "save": "Save"
+    "save": "Save",
+    "birthYear": "Birth Year",
+    "changePhoto": "Change Photo",
+    "editPetTitle": "Edit Pet Profile"
   },
   "weight": {
     "title": "Weight Tracking",
@@ -82,6 +87,10 @@
     "temporary": "Temporary",
     "supplement": "Supplement",
     "dosage": "Dosage",
+    "dosageUnit": "Unit",
+    "pill": "Pill",
+    "ml": "ml",
+    "units_dose": "UNITS",
     "frequency": "Frequency",
     "startDate": "Start Date",
     "endDate": "End Date",
@@ -114,7 +123,10 @@
     "noVaccines": "No vaccines yet",
     "selectVaccine": "Select Vaccine",
     "customName": "Vaccine Name (manual)",
-    "manualNextDue": "Next Due Date (DD/MM/YYYY)"
+    "manualNextDue": "Next Due Date (DD/MM/YYYY)",
+    "autoNextDue": "Calculate next date automatically",
+    "daysLeft": "days",
+    "daysAgo": "days ago"
   },
   "treatments": {
     "title": "Treatments",
@@ -128,6 +140,10 @@
     "product": "Product",
     "date": "Treatment Date",
     "nextDue": "Next Due",
+    "nextCategory": "Next Treatment Type",
+    "hasNextTreatment": "Schedule Next Treatment",
+    "reminderEnabled": "Reminder for Next Treatment",
+    "reminderDays": "Days Before Reminder",
     "dosage": "Dosage",
     "noTreatments": "No treatments yet"
   },
@@ -148,7 +164,10 @@
     "completionNotes": "Visit Summary",
     "noAppointments": "No upcoming appointments",
     "markCompleted": "Mark as Completed",
-    "cancel": "Cancel Appointment"
+    "cancel": "Cancel Appointment",
+    "dateOnly": "Date (DD/MM/YYYY)",
+    "timeOnly": "Time (HH:MM)",
+    "invalidDate": "Invalid date"
   },
   "food": {
     "title": "Food",
@@ -161,7 +180,11 @@
     "raw": "Raw/Fresh",
     "supplement": "Supplement",
     "treat": "Treat",
-    "amount": "Amount (grams)",
+    "amount": "Amount",
+    "amountUnit": "Unit",
+    "gram": "Gram",
+    "cups": "Cups",
+    "pouch": "Pouch",
     "date": "Feeding Date",
     "notes": "Notes",
     "history": "Feeding History",
@@ -200,11 +223,40 @@
     "quietHours": "Quiet Hours",
     "family": "My Family",
     "inviteCode": "Invite Code",
+    "shareCode": "Share Invite Code",
     "about": "About",
     "version": "Version",
     "restartRequired": "Restart Required",
     "restartMessage": "Language change takes effect after restarting the app.",
     "restart": "Restart Now"
+  },
+  "ai": {
+    "title": "AI Assistant",
+    "context": "Context",
+    "allPets": "All Pets",
+    "welcome": "Ask me about your pets",
+    "disclaimer": "⚠️ This information is for general purposes only. Always consult a veterinarian for medical decisions.",
+    "suggestions": "Suggested questions:",
+    "assistant": "AI Assistant",
+    "thinking": "Thinking...",
+    "inputPlaceholder": "Ask a question about your pets...",
+    "error": "Error getting response"
+  },
+  "medicalFile": {
+    "title": "Medical File",
+    "add": "Add Document",
+    "docName": "Document Name",
+    "docNameHint": "e.g. X-ray, Blood Test",
+    "noDocs": "No documents in the medical file yet",
+    "hint": "Add medical documents, images, and test results",
+    "pickImage": "Image",
+    "pickPDF": "PDF",
+    "uploading": "Uploading document...",
+    "deleteTitle": "Delete Document",
+    "deleteConfirm": "Delete \"{{name}}\"?",
+    "docPickerMissing": "Document picker not installed",
+    "docPickerInstall": "Run: npx expo install expo-document-picker",
+    "noFileSelected": "Please select a file first"
   },
   "common": {
     "save": "Save",

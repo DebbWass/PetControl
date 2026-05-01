@@ -1,9 +1,69 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
+import Anthropic from '@anthropic-ai/sdk';
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// ─── AI Pet Assistant ─────────────────────────────────────────────────────────
+// Proxies to Claude API so the API key stays server-side.
+// Set the key: firebase functions:secrets:set ANTHROPIC_API_KEY
+// (or via Firebase Console → Functions → Secrets)
+
+export const askPetAI = onCall(
+  {
+    region: 'europe-west1',
+    secrets: ['ANTHROPIC_API_KEY'],
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be authenticated');
+    }
+
+    const { message, petContext, language } = request.data as {
+      message: string;
+      petContext: string;
+      language: string;
+    };
+
+    if (!message?.trim()) {
+      throw new HttpsError('invalid-argument', 'message is required');
+    }
+
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+
+    const isHebrew = language === 'he';
+
+    const systemPrompt = isHebrew
+      ? `אתה עוזר וטרינרי מועיל ומקצועי. אתה עוזר לבעלי חיות מחמד עם שאלות על בריאות, תרופות וטיפולים.
+תמיד ענה בעברית. תמיד המלץ להתייעץ עם וטרינר לגבי החלטות רפואיות.
+אל תיתן אבחנות רפואיות מוגדרות. ספק מידע כללי ומועיל.
+אם יש מידע על החיה, קח אותו בחשבון.`
+      : `You are a helpful and professional veterinary assistant. You help pet owners with questions about health, medications, and treatments.
+Always respond in English. Always recommend consulting a veterinarian for medical decisions.
+Do not provide definitive medical diagnoses. Provide general, helpful information.
+If pet information is provided, take it into account.`;
+
+    const userMessage = petContext
+      ? `[Context about the pet: ${petContext}]\n\n${message}`
+      : message;
+
+    const response = await anthropic.messages.create({
+      model: 'claude-opus-4-6',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+
+    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+    return { response: text };
+  }
+);
 
 // ─── Scheduled daily reminders ────────────────────────────────────────────────
 // Runs at 08:00 Israel time (06:00 UTC) every day.

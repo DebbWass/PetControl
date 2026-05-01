@@ -2,11 +2,22 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "types": ["jest"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@types/*": ["src/types/*"]
+      "@/*": [
+        "src/*"
+      ],
+      "@types/*": [
+        "src/types/*"
+      ]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.d.ts", "expo-env.d.ts"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.d.ts",
+    "expo-env.d.ts",
+    ".expo/types/**/*.ts"
+  ]
 }

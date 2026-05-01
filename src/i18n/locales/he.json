@@ -7,6 +7,7 @@
     "home": "ראשי",
     "pets": "חיות",
     "reminders": "תזכורות",
+    "ai": "AI",
     "settings": "הגדרות"
   },
   "auth": {
@@ -20,7 +21,8 @@
     "noAccount": "אין לך חשבון?",
     "hasAccount": "יש לך חשבון?",
     "logout": "יציאה",
-    "forgotPassword": "שכחתי סיסמה"
+    "forgotPassword": "שכחתי סיסמה",
+    "rememberMe": "זכור אותי"
   },
   "family": {
     "create": "יצירת משפחה",
@@ -47,7 +49,7 @@
     "birthdate": "תאריך לידה",
     "color": "צבע",
     "microchip": "מספר מיקרוצ'יפ",
-    "isNeutered": "מסורס/עקרה",
+    "isNeutered": "מסורס/מעוקרת",
     "photo": "תמונה",
     "addPhoto": "הוסף תמונה",
     "noPets": "עדיין אין חיות. הוסף את הראשונה!",
@@ -57,7 +59,10 @@
     "age": "גיל",
     "years": "שנים",
     "months": "חודשים",
-    "save": "שמור"
+    "save": "שמור",
+    "birthYear": "שנת לידה",
+    "changePhoto": "שנה תמונה",
+    "editPetTitle": "עריכת פרטי חיה"
   },
   "weight": {
     "title": "מעקב משקל",
@@ -82,6 +87,10 @@
     "temporary": "זמנית",
     "supplement": "תוסף",
     "dosage": "מינון",
+    "dosageUnit": "יחידות",
+    "pill": "כדור",
+    "ml": "מ\"ל",
+    "units_dose": "UNITS",
     "frequency": "תדירות",
     "startDate": "תאריך התחלה",
     "endDate": "תאריך סיום",
@@ -114,7 +123,10 @@
     "noVaccines": "עדיין אין חיסונים",
     "selectVaccine": "בחר חיסון",
     "customName": "שם חיסון (ידני)",
-    "manualNextDue": "תאריך הבא (DD/MM/YYYY)"
+    "manualNextDue": "תאריך חיסון הבא (DD/MM/YYYY)",
+    "autoNextDue": "חשב תאריך הבא אוטומטית",
+    "daysLeft": "ימים",
+    "daysAgo": "ימים לפני"
   },
   "treatments": {
     "title": "טיפולים",
@@ -128,6 +140,10 @@
     "product": "מוצר",
     "date": "תאריך טיפול",
     "nextDue": "טיפול הבא",
+    "nextCategory": "סוג הטיפול הבא",
+    "hasNextTreatment": "הגדר טיפול הבא",
+    "reminderEnabled": "תזכורת לטיפול הבא",
+    "reminderDays": "ימים לפני לתזכורת",
     "dosage": "מינון",
     "noTreatments": "עדיין אין טיפולים"
   },
@@ -148,7 +164,10 @@
     "completionNotes": "סיכום ביקור",
     "noAppointments": "אין תורים קרובים",
     "markCompleted": "סמן כהושלם",
-    "cancel": "בטל תור"
+    "cancel": "בטל תור",
+    "dateOnly": "תאריך (DD/MM/YYYY)",
+    "timeOnly": "שעה (HH:MM)",
+    "invalidDate": "תאריך לא תקין"
   },
   "food": {
     "title": "מזון",
@@ -161,7 +180,11 @@
     "raw": "טרי/נא",
     "supplement": "תוסף",
     "treat": "פינוק",
-    "amount": "כמות (גרם)",
+    "amount": "כמות",
+    "amountUnit": "יחידה",
+    "gram": "גרם",
+    "cups": "כוסות",
+    "pouch": "פאוץ'",
     "date": "תאריך האכלה",
     "notes": "הערות",
     "history": "היסטוריית האכלה",
@@ -200,6 +223,7 @@
     "quietHours": "שעות שקטות",
     "family": "המשפחה שלי",
     "inviteCode": "קוד הזמנה",
+    "shareCode": "שתף קוד הזמנה",
     "about": "אודות",
     "version": "גרסה",
     "restartRequired": "נדרש אתחול",
@@ -210,6 +234,34 @@
     "vaccines_notif": "חיסונים",
     "treatments_notif": "טיפולים",
     "appointments_notif": "תורים"
+  },
+  "ai": {
+    "title": "עוזר AI",
+    "context": "הקשר",
+    "allPets": "כל החיות",
+    "welcome": "שאל אותי על החיות שלך",
+    "disclaimer": "⚠️ המידע הוא לצורכי מידע כללי בלבד. תמיד התייעץ עם וטרינר לגבי החלטות רפואיות.",
+    "suggestions": "שאלות מוצעות:",
+    "assistant": "עוזר AI",
+    "thinking": "חושב...",
+    "inputPlaceholder": "שאל שאלה על החיות שלך...",
+    "error": "שגיאה בקבלת תשובה"
+  },
+  "medicalFile": {
+    "title": "תיק רפואי",
+    "add": "הוסף מסמך",
+    "docName": "שם המסמך",
+    "docNameHint": "לדוגמה: צילום רנטגן, בדיקת דם",
+    "noDocs": "עדיין אין מסמכים בתיק הרפואי",
+    "hint": "הוסף מסמכים רפואיים, תמונות ותוצאות בדיקות",
+    "pickImage": "תמונה",
+    "pickPDF": "PDF",
+    "uploading": "מעלה מסמך...",
+    "deleteTitle": "מחק מסמך",
+    "deleteConfirm": "למחוק את \"{{name}}\"?",
+    "docPickerMissing": "בוחר קבצים לא מותקן",
+    "docPickerInstall": "הרץ: npx expo install expo-document-picker",
+    "noFileSelected": "יש לבחור קובץ תחילה"
   },
   "common": {
     "save": "שמור",

@@ -1,8 +1,12 @@
+import { useCallback } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
 import { Text, FAB, Card, Avatar } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { usePets } from '../../src/hooks/usePets';
+import { getPets } from '../../src/services/firebase/firestore';
+import { usePetsStore } from '../../src/store/petsStore';
+import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_MAP } from '../../src/constants/species';
 import { Pet } from '../../src/types';
@@ -38,6 +42,18 @@ function PetCard({ pet, onPress }: { pet: Pet; onPress: () => void }) {
 export default function PetsScreen() {
   const { t } = useTranslation();
   const pets = usePets();
+  const setPets = usePetsStore((s) => s.setPets);
+  const familyId = useAuthStore((s) => s.user?.familyId);
+
+  // Refresh the pets list every time this tab comes into focus.
+  // This ensures a newly-added pet is visible even if the real-time
+  // subscription hadn't fired yet (e.g. missing index, slow connection).
+  useFocusEffect(
+    useCallback(() => {
+      if (!familyId) return;
+      getPets(familyId).then(setPets).catch(console.error);
+    }, [familyId])
+  );
 
   return (
     <View style={styles.container}>

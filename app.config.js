@@ -19,6 +19,7 @@ module.exports = {
         backgroundColor: "#4CAF50",
       },
       edgeToEdgeEnabled: true,
+      softwareKeyboardLayoutMode: "pan",
       package: "com.petcontrol.app",
       versionCode: 2,
       // Locally uses ./google-services.json; on EAS the secret file path is injected via env var

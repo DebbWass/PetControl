@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, ScrollView, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Text, TextInput, Button, HelperText, SegmentedButtons, Menu, ActivityIndicator } from 'react-native-paper';
+import { Text, TextInput, Button, HelperText, SegmentedButtons, Switch, Menu, ActivityIndicator } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,6 +10,7 @@ import { Colors } from '../../src/constants/colors';
 import { SPECIES_LIST } from '../../src/constants/species';
 import { Species, Sex } from '../../src/types';
 import { uploadPetPhoto } from '../../src/services/storage';
+import { Timestamp } from 'firebase/firestore';
 
 export default function NewPetScreen() {
   const { t, i18n } = useTranslation();
@@ -20,6 +21,7 @@ export default function NewPetScreen() {
   const [species, setSpecies] = useState<Species>('cat');
   const [breed, setBreed] = useState('');
   const [sex, setSex] = useState<Sex>('unknown');
+  const [birthYear, setBirthYear] = useState('');
   const [color, setColor] = useState('');
   const [isNeutered, setIsNeutered] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -51,12 +53,19 @@ export default function NewPetScreen() {
     setLoading(true);
     setError('');
     try {
+      const yearNum = parseInt(birthYear, 10);
+      const birthdateTs = birthYear.trim() && !isNaN(yearNum)
+        ? Timestamp.fromDate(new Date(yearNum, 0, 1))
+        : undefined;
+
       const petId = await addPet(user.familyId, {
         familyId: user.familyId,
         name: name.trim(),
         species,
         breed: breed.trim() || undefined,
         sex,
+        birthdate: birthdateTs,
+        birthYear: birthYear.trim() && !isNaN(yearNum) ? yearNum : undefined,
         color: color.trim() || undefined,
         isNeutered,
         isActive: true,
@@ -99,6 +108,17 @@ export default function NewPetScreen() {
         onChangeText={setName}
         mode="outlined"
         style={styles.input}
+      />
+
+      {/* Birth Year */}
+      <TextInput
+        label={`${t('pets.birthYear')} (${t('common.optional')})`}
+        value={birthYear}
+        onChangeText={setBirthYear}
+        mode="outlined"
+        keyboardType="number-pad"
+        style={styles.input}
+        maxLength={4}
       />
 
       {/* Species picker */}
@@ -162,15 +182,19 @@ export default function NewPetScreen() {
       />
 
       {/* Neutered */}
-      <SegmentedButtons
-        value={isNeutered ? 'yes' : 'no'}
-        onValueChange={(v) => setIsNeutered(v === 'yes')}
-        buttons={[
-          { value: 'no', label: `${t('pets.isNeutered')}: ${t('common.no')}` },
-          { value: 'yes', label: `${t('pets.isNeutered')}: ${t('common.yes')}` },
-        ]}
-        style={styles.segment}
-      />
+      <View style={styles.switchRow}>
+        <Text variant="bodyLarge" style={styles.switchLabel}>{t('pets.isNeutered')}</Text>
+        <View style={styles.switchControl}>
+          <Text variant="bodyMedium" style={styles.switchValue}>
+            {isNeutered ? t('common.yes') : t('common.no')}
+          </Text>
+          <Switch
+            value={isNeutered}
+            onValueChange={setIsNeutered}
+            color={Colors.primary}
+          />
+        </View>
+      </View>
 
       {error ? <HelperText type="error">{error}</HelperText> : null}
 
@@ -207,6 +231,21 @@ const styles = StyleSheet.create({
   input: { marginBottom: 12 },
   label: { marginBottom: 4, marginTop: 8, color: Colors.textSecondary },
   segment: { marginBottom: 16 },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  switchLabel: { flex: 1 },
+  switchControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchValue: { color: Colors.textSecondary },
   menuButton: { marginBottom: 16, borderColor: Colors.border },
   saveButton: { marginTop: 8, borderRadius: 8 },
   cancelButton: { marginTop: 4 },

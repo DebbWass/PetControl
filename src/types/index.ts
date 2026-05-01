@@ -74,6 +74,7 @@ export interface Pet {
   breed?: string;
   sex: Sex;
   birthdate?: Timestamp;
+  birthYear?: number;
   isNeutered: boolean;
   photoUrl?: string;
   color?: string;
@@ -109,6 +110,7 @@ export interface Medication {
   name: string;
   type: MedicationType;
   dosage: string;
+  dosageUnit?: string;
   frequencyValue: number;
   frequencyUnit: FrequencyUnit;
   administrationRoute?: string;
@@ -191,6 +193,25 @@ export interface Appointment {
   updatedAt: Timestamp;
 }
 
+// ─── Medical Document ─────────────────────────────────────────────────────────
+
+export type DocumentFileType = 'image' | 'pdf' | 'other';
+
+export interface MedicalDocument {
+  id: string;
+  petId: string;
+  familyId: string;
+  name: string;           // display name (e.g. "X-ray 2024", "Blood test")
+  fileUrl: string;        // Firebase Storage download URL
+  fileType: DocumentFileType;
+  mimeType?: string;
+  notes?: string;
+  uploadedBy: string;     // uid
+  uploadedAt: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // ─── Food ─────────────────────────────────────────────────────────────────────
 
 export type FoodType = 'dry' | 'wet' | 'raw' | 'supplement' | 'treat' | 'other';
@@ -203,6 +224,7 @@ export interface FoodRecord {
   foodName: string;
   foodType: FoodType;
   amountGrams: number;
+  amountUnit?: string;
   feedingDate: Timestamp;
   notes?: string;
   recordedBy: string;

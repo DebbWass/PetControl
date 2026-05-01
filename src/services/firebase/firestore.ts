@@ -21,7 +21,7 @@ import {
   DocumentData,
 } from 'firebase/firestore';
 import { db } from './config';
-import { Pet, WeightRecord, Medication, Vaccine, Treatment, Appointment, FoodRecord } from '../../types';
+import { Pet, WeightRecord, Medication, Vaccine, Treatment, Appointment, FoodRecord, MedicalDocument } from '../../types';
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -36,6 +36,7 @@ export const paths = {
   treatments: (familyId: string, petId: string) => `families/${familyId}/pets/${petId}/treatments`,
   appointments: (familyId: string, petId: string) => `families/${familyId}/pets/${petId}/appointments`,
   food: (familyId: string, petId: string) => `families/${familyId}/pets/${petId}/food`,
+  documents: (familyId: string, petId: string) => `families/${familyId}/pets/${petId}/documents`,
 };
 
 // ─── Pets ─────────────────────────────────────────────────────────────────────
@@ -63,6 +64,19 @@ export async function softDeletePet(familyId: string, petId: string): Promise<vo
   });
 }
 
+/** One-shot fetch of all active pets – used as a fallback / focus refresh.
+ *  Filters client-side so pets missing the isActive field are still shown. */
+export async function getPets(familyId: string): Promise<Pet[]> {
+  const q = query(
+    collection(db, paths.pets(familyId)),
+    orderBy('name')
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as Pet))
+    .filter((p) => p.isActive !== false);
+}
+
 export function subscribeToPets(
   familyId: string,
   onUpdate: (pets: Pet[]) => void,
@@ -70,13 +84,19 @@ export function subscribeToPets(
 ) {
   const q = query(
     collection(db, paths.pets(familyId)),
-    where('isActive', '==', true),
     orderBy('name')
   );
   return onSnapshot(
     q,
-    (snap) => onUpdate(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Pet))),
-    onError
+    (snap) => onUpdate(
+      snap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Pet))
+        .filter((p) => p.isActive !== false)
+    ),
+    (err) => {
+      console.error('[subscribeToPets]', err);
+      onError?.(err);
+    }
   );
 }
 
@@ -114,12 +134,17 @@ export function subscribeToWeights(
 
 // ─── Generic sub-collection helper ───────────────────────────────────────────
 
+/** Remove keys whose value is undefined – Firestore rejects undefined fields. */
+function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
 export async function addRecord<T>(
   collectionPath: string,
   data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   const ref = await addDoc(collection(db, collectionPath), {
-    ...data,
+    ...stripUndefined(data as Record<string, unknown>),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -132,7 +157,7 @@ export async function updateRecord<T>(
   data: Partial<T>
 ): Promise<void> {
   await updateDoc(doc(db, collectionPath, docId), {
-    ...data,
+    ...stripUndefined(data as Record<string, unknown>),
     updatedAt: serverTimestamp(),
   });
 }

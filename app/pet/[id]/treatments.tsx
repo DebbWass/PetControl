@@ -1,14 +1,35 @@
 import { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
-import { Text, FAB, Card, Chip, Button, TextInput, HelperText, Dialog, Portal, SegmentedButtons } from 'react-native-paper';
+import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  Text, FAB, Card, Chip, Button, TextInput, HelperText,
+  Dialog, Portal, SegmentedButtons, Switch, List,
+} from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Timestamp, orderBy } from 'firebase/firestore';
+import { format, parse, isValid } from 'date-fns';
 import { subscribeToCollection, addRecord, paths } from '../../../src/services/firebase/firestore';
 import { useAuthStore } from '../../../src/store/authStore';
 import { Colors } from '../../../src/constants/colors';
 import { Treatment, TreatmentCategory } from '../../../src/types';
 import { formatDate } from '../../../src/utils/dateUtils';
+import { DateTimeInput } from '../../../src/components/DateTimeInput';
+
+function todayStr(): string {
+  return format(new Date(), 'dd/MM/yyyy');
+}
+
+function parseDateStr(s: string): Date | null {
+  const d = parse(s.trim(), 'dd/MM/yyyy', new Date());
+  return isValid(d) ? d : null;
+}
+
+function defaultNextDate(category: TreatmentCategory): string {
+  const days = category === 'deworming' ? 90 : category === 'heartworm' ? 30 : 30;
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return format(d, 'dd/MM/yyyy');
+}
 
 export default function TreatmentsScreen() {
   const { id: petId } = useLocalSearchParams<{ id: string }>();
@@ -18,8 +39,23 @@ export default function TreatmentsScreen() {
 
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
+
+  // Form fields
   const [product, setProduct] = useState('');
   const [category, setCategory] = useState<TreatmentCategory>('flea_tick');
+  const [treatmentDateInput, setTreatmentDateInput] = useState(todayStr());
+  const [dosageInput, setDosageInput] = useState('');
+  const [notesInput, setNotesInput] = useState('');
+
+  // Next treatment
+  const [hasNextTreatment, setHasNextTreatment] = useState(true);
+  const [nextCategory, setNextCategory] = useState<TreatmentCategory>('flea_tick');
+  const [nextDueDateInput, setNextDueDateInput] = useState(defaultNextDate('flea_tick'));
+
+  // Reminder
+  const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [reminderDays, setReminderDays] = useState('7');
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,29 +68,62 @@ export default function TreatmentsScreen() {
     );
   }, [familyId, petId]);
 
-  function reset() { setProduct(''); setCategory('flea_tick'); setError(''); }
+  function reset() {
+    setProduct('');
+    setCategory('flea_tick');
+    setTreatmentDateInput(todayStr());
+    setDosageInput('');
+    setNotesInput('');
+    setHasNextTreatment(true);
+    setNextCategory('flea_tick');
+    setNextDueDateInput(defaultNextDate('flea_tick'));
+    setReminderEnabled(true);
+    setReminderDays('7');
+    setError('');
+  }
+
+  // When category changes, suggest a new next-due date
+  function handleCategoryChange(cat: TreatmentCategory) {
+    setCategory(cat);
+    setNextCategory(cat);
+    setNextDueDateInput(defaultNextDate(cat));
+  }
 
   async function handleAdd() {
     if (!product.trim()) { setError(t('common.required')); return; }
+
+    const treatmentDate = parseDateStr(treatmentDateInput);
+    if (!treatmentDate) { setError(t('appointments.invalidDate')); return; }
+
+    let nextDueTimestamp: Timestamp | undefined;
+    if (hasNextTreatment) {
+      const nextDate = parseDateStr(nextDueDateInput);
+      if (!nextDate) { setError(t('appointments.invalidDate')); return; }
+      nextDueTimestamp = Timestamp.fromDate(nextDate);
+    }
+
     setLoading(true);
     try {
-      const defaultDays = category === 'deworming' ? 90 : 30;
-      const nextDue = new Date();
-      nextDue.setDate(nextDue.getDate() + defaultDays);
-
       await addRecord<Treatment>(paths.treatments(familyId, petId), {
-        petId, familyId,
+        petId,
+        familyId,
         category,
         productName: product.trim(),
-        treatmentDate: Timestamp.now(),
-        nextDueDate: Timestamp.fromDate(nextDue),
-        reminderEnabled: true,
-        reminderDaysBeforeDue: 14,
+        treatmentDate: Timestamp.fromDate(treatmentDate),
+        nextDueDate: nextDueTimestamp,
+        dosage: dosageInput.trim() || undefined,
+        notes: notesInput.trim() || undefined,
+        reminderEnabled: hasNextTreatment && reminderEnabled,
+        reminderDaysBeforeDue: hasNextTreatment && reminderEnabled ? (parseInt(reminderDays, 10) || 7) : 7,
         createdBy: user!.uid,
       });
-      setDialogVisible(false); reset();
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
+      setDialogVisible(false);
+      reset();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -68,35 +137,141 @@ export default function TreatmentsScreen() {
               <Card key={tr.id} style={styles.card}>
                 <Card.Title
                   title={tr.productName}
-                  subtitle={`${formatDate(tr.treatmentDate)} → ${t('treatments.nextDue')}: ${formatDate(tr.nextDueDate)}`}
+                  subtitle={`${formatDate(tr.treatmentDate)}${tr.nextDueDate ? ` → ${t('treatments.nextDue')}: ${formatDate(tr.nextDueDate)}` : ''}`}
                   right={() => (
                     <Chip compact style={styles.chip}>{t(`treatments.${tr.category}`)}</Chip>
                   )}
                 />
+                {(tr.dosage || tr.notes) ? (
+                  <Card.Content>
+                    {tr.dosage ? <Text style={styles.subText}>{t('treatments.dosage')}: {tr.dosage}</Text> : null}
+                    {tr.notes ? <Text style={styles.subText}>{tr.notes}</Text> : null}
+                  </Card.Content>
+                ) : null}
               </Card>
             ))
           }
         </ScrollView>
 
-        <FAB icon="plus" style={styles.fab} onPress={() => setDialogVisible(true)} />
+        <FAB icon="plus" style={styles.fab} onPress={() => { reset(); setDialogVisible(true); }} />
 
         <Portal>
           <Dialog visible={dialogVisible} onDismiss={() => { setDialogVisible(false); reset(); }}>
             <Dialog.Title>{t('treatments.add')}</Dialog.Title>
-            <Dialog.Content>
-              <SegmentedButtons
-                value={category}
-                onValueChange={(v) => setCategory(v as TreatmentCategory)}
-                buttons={[
-                  { value: 'flea_tick', label: t('treatments.flea_tick') },
-                  { value: 'deworming', label: t('treatments.deworming') },
-                  { value: 'other', label: t('treatments.other') },
-                ]}
-                style={styles.segment}
-              />
-              <TextInput label={t('treatments.product')} value={product} onChangeText={setProduct} mode="outlined" style={styles.input} />
-              {error ? <HelperText type="error">{error}</HelperText> : null}
-            </Dialog.Content>
+            <KeyboardAvoidingView behavior={Platform.OS === 'android' ? 'padding' : 'height'}>
+            <Dialog.ScrollArea style={styles.scrollArea}>
+              <ScrollView keyboardShouldPersistTaps="handled">
+                {/* Category */}
+                <Text style={styles.sectionLabel}>{t('treatments.category')}</Text>
+                <SegmentedButtons
+                  value={category}
+                  onValueChange={(v) => handleCategoryChange(v as TreatmentCategory)}
+                  buttons={[
+                    { value: 'flea_tick', label: t('treatments.flea_tick') },
+                    { value: 'deworming', label: t('treatments.deworming') },
+                    { value: 'other', label: t('treatments.other') },
+                  ]}
+                  style={styles.segment}
+                />
+
+                {/* Product */}
+                <TextInput
+                  label={t('treatments.product')}
+                  value={product}
+                  onChangeText={setProduct}
+                  mode="outlined"
+                  style={styles.input}
+                />
+
+                {/* Treatment date */}
+                <DateTimeInput
+                  label={t('treatments.date')}
+                  value={treatmentDateInput}
+                  onChange={setTreatmentDateInput}
+                  mode="date"
+                />
+
+                {/* Dosage (optional) */}
+                <TextInput
+                  label={`${t('treatments.dosage')} (${t('common.optional')})`}
+                  value={dosageInput}
+                  onChangeText={setDosageInput}
+                  mode="outlined"
+                  style={styles.input}
+                />
+
+                {/* Notes (optional) */}
+                <TextInput
+                  label={`${t('common.notes')} (${t('common.optional')})`}
+                  value={notesInput}
+                  onChangeText={setNotesInput}
+                  mode="outlined"
+                  style={styles.input}
+                  multiline
+                  numberOfLines={2}
+                />
+
+                {/* Next treatment section */}
+                <List.Item
+                  title={t('treatments.hasNextTreatment')}
+                  right={() => (
+                    <Switch
+                      value={hasNextTreatment}
+                      onValueChange={setHasNextTreatment}
+                      color={Colors.primary}
+                    />
+                  )}
+                />
+
+                {hasNextTreatment && (
+                  <>
+                    <Text style={styles.sectionLabel}>{t('treatments.nextCategory')}</Text>
+                    <SegmentedButtons
+                      value={nextCategory}
+                      onValueChange={(v) => setNextCategory(v as TreatmentCategory)}
+                      buttons={[
+                        { value: 'flea_tick', label: t('treatments.flea_tick') },
+                        { value: 'deworming', label: t('treatments.deworming') },
+                        { value: 'other', label: t('treatments.other') },
+                      ]}
+                      style={styles.segment}
+                    />
+
+                    <DateTimeInput
+                      label={t('treatments.nextDue')}
+                      value={nextDueDateInput}
+                      onChange={setNextDueDateInput}
+                      mode="date"
+                    />
+
+                    {/* Reminder */}
+                    <List.Item
+                      title={t('treatments.reminderEnabled')}
+                      right={() => (
+                        <Switch
+                          value={reminderEnabled}
+                          onValueChange={setReminderEnabled}
+                          color={Colors.primary}
+                        />
+                      )}
+                    />
+                    {reminderEnabled && (
+                      <TextInput
+                        label={t('treatments.reminderDays')}
+                        value={reminderDays}
+                        onChangeText={setReminderDays}
+                        mode="outlined"
+                        keyboardType="number-pad"
+                        style={styles.input}
+                      />
+                    )}
+                  </>
+                )}
+
+                {error ? <HelperText type="error">{error}</HelperText> : null}
+              </ScrollView>
+            </Dialog.ScrollArea>
+            </KeyboardAvoidingView>
             <Dialog.Actions>
               <Button onPress={() => { setDialogVisible(false); reset(); }}>{t('common.cancel')}</Button>
               <Button onPress={handleAdd} loading={loading} textColor={Colors.primary}>{t('common.save')}</Button>
@@ -117,4 +292,7 @@ const styles = StyleSheet.create({
   input: { marginBottom: 8 },
   segment: { marginBottom: 12 },
   chip: { marginRight: 8, backgroundColor: Colors.primaryLight },
+  sectionLabel: { color: Colors.textSecondary, fontSize: 12, marginBottom: 6, marginTop: 4 },
+  subText: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+  scrollArea: { maxHeight: 500 },
 });
