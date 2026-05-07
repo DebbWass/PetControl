@@ -147,7 +147,7 @@
     "add": "הוסף טיפול",
     "category": "קטגוריה",
     "deworming": "תילוע",
-    "flea_tick": "פשפשים/קרציות",
+    "flea_tick": "פשפשים",
     "heartworm": "תולעת הלב",
     "lice": "כינים",
     "other": "אחר",
@@ -159,7 +159,9 @@
     "reminderEnabled": "תזכורת לטיפול הבא",
     "reminderDays": "ימים לפני לתזכורת",
     "dosage": "מינון",
-    "noTreatments": "עדיין אין טיפולים"
+    "noTreatments": "עדיין אין טיפולים",
+    "deleteConfirm": "למחוק טיפול {{name}}?",
+    "otherType": "פרט סוג טיפול"
   },
   "appointments": {
     "title": "תורים",

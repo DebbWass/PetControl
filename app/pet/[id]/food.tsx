@@ -222,6 +222,13 @@ export default function FoodScreen() {
                   buttons={[
                     { value: 'dry', label: t('food.dry') },
                     { value: 'wet', label: t('food.wet') },
+                  ]}
+                  style={[styles.segment, { marginBottom: 4 }]}
+                />
+                <SegmentedButtons
+                  value={foodType}
+                  onValueChange={(v) => setFoodType(v as FoodType)}
+                  buttons={[
                     { value: 'raw', label: t('food.raw') },
                     { value: 'treat', label: t('food.treat') },
                   ]}
