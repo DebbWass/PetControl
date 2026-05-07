@@ -116,9 +116,12 @@ export interface Medication {
   administrationRoute?: string;
   startDate: Timestamp;
   endDate?: Timestamp;
+  durationValue?: number;
+  durationUnit?: 'days' | 'weeks';
   reminderEnabled: boolean;
   reminderTime?: string; // "HH:MM"
-  reminderDays?: number[]; // 0=Sun..6=Sat
+  reminderTimes?: string[]; // multi-dose daily: ["HH:MM", ...]
+  reminderDays?: number[]; // weekly: 0=Sun..6=Sat; monthly: 1..31
   notes?: string;
   isActive: boolean;
   nextDueDate?: Timestamp;

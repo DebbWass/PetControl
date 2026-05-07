@@ -107,7 +107,21 @@
     "monthly": "Monthly",
     "as_needed": "As Needed",
     "reminderEnabled": "Enable Reminder",
-    "reminderTimeLabel": "Reminder Time (HH:MM)"
+    "reminderTimeLabel": "Reminder Time (HH:MM)",
+    "duration": "Duration",
+    "days": "Days",
+    "weeks": "Weeks",
+    "deleteConfirm": "Delete \"{{name}}\"?",
+    "reminderTimeN": "Reminder Time {{n}}",
+    "reminderWeekDay": "Day of Week",
+    "reminderMonthDay": "Day of Month (1–31)",
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday"
   },
   "vaccines": {
     "title": "Vaccines",
