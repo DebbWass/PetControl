@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import {
   Text, FAB, Card, Chip, Button, TextInput, HelperText,
   Dialog, Portal, SegmentedButtons, Switch, List, IconButton, Menu,
 } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Timestamp, orderBy, where } from 'firebase/firestore';
+import { Timestamp, where } from 'firebase/firestore';
 import {
-  subscribeToCollection, addRecord, updateRecord, paths,
+  subscribeToCollection, addRecord, updateRecord, deleteRecord, paths,
 } from '../../../src/services/firebase/firestore';
 import { useAuthStore } from '../../../src/store/authStore';
 import { Colors } from '../../../src/constants/colors';
@@ -16,8 +16,10 @@ import { Medication, MedicationType, FrequencyUnit } from '../../../src/types';
 import { formatDate } from '../../../src/utils/dateUtils';
 import { calcMedicationNextDue } from '../../../src/utils/medicationUtils';
 import { toTimestamp } from '../../../src/utils/dateUtils';
+import { addDays, addWeeks } from 'date-fns';
 
 const DOSAGE_UNITS = ['pill', 'ml', 'units_dose'] as const;
+const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
 export default function MedicationsScreen() {
   const { id: petId } = useLocalSearchParams<{ id: string }>();
@@ -42,12 +44,29 @@ export default function MedicationsScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Change 1: Temporary duration
+  const [durationValue, setDurationValue] = useState('7');
+  const [durationUnit, setDurationUnit] = useState<'days' | 'weeks'>('days');
+  const [durationMenuVisible, setDurationMenuVisible] = useState(false);
+
+  // Change 5: Smart reminder
+  const [reminderTimes, setReminderTimes] = useState<string[]>(['08:00']);
+  const [reminderWeekDay, setReminderWeekDay] = useState(0);
+  const [reminderWeekDayMenuVisible, setReminderWeekDayMenuVisible] = useState(false);
+  const [reminderMonthDay, setReminderMonthDay] = useState('1');
+
+  // Change 3: client-side sort, no orderBy needed
   useEffect(() => {
     if (!familyId || !petId) return;
     return subscribeToCollection<Medication>(
       paths.medications(familyId, petId),
-      [where('isActive', '==', true), orderBy('createdAt', 'desc')],
-      setMeds
+      [where('isActive', '==', true)],
+      (items) => {
+        const sorted = [...items].sort(
+          (a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()
+        );
+        setMeds(sorted);
+      }
     );
   }, [familyId, petId]);
 
@@ -62,6 +81,11 @@ export default function MedicationsScreen() {
     setReminderEnabled(false);
     setReminderTime('08:00');
     setError('');
+    setDurationValue('7');
+    setDurationUnit('days');
+    setReminderTimes(['08:00']);
+    setReminderWeekDay(0);
+    setReminderMonthDay('1');
   }
 
   function openEdit(med: Medication) {
@@ -75,6 +99,22 @@ export default function MedicationsScreen() {
     setReminderEnabled(med.reminderEnabled);
     setReminderTime(med.reminderTime ?? '08:00');
     setError('');
+    // Change 1
+    if (med.durationValue && med.durationUnit) {
+      setDurationValue(String(med.durationValue));
+      setDurationUnit(med.durationUnit);
+    } else {
+      setDurationValue('7');
+      setDurationUnit('days');
+    }
+    // Change 5
+    setReminderTimes(
+      med.reminderTimes && med.reminderTimes.length > 0
+        ? med.reminderTimes
+        : [med.reminderTime ?? '08:00']
+    );
+    setReminderWeekDay(med.reminderDays?.[0] ?? 0);
+    setReminderMonthDay(String(med.reminderDays?.[0] ?? 1));
     setDialogVisible(true);
   }
 
@@ -84,6 +124,35 @@ export default function MedicationsScreen() {
       return;
     }
     const fv = parseInt(frequencyValue, 10) || 1;
+
+    // Change 1: endDate for temporary
+    let endDate: Timestamp | undefined;
+    if (type === 'temporary') {
+      const dv = parseInt(durationValue, 10) || 7;
+      const endDateObj = durationUnit === 'weeks' ? addWeeks(new Date(), dv) : addDays(new Date(), dv);
+      endDate = Timestamp.fromDate(endDateObj);
+    }
+
+    // Change 5: smart reminder fields
+    let reminderTimeToSave: string | undefined;
+    let reminderTimesToSave: string[] | undefined;
+    let reminderDaysToSave: number[] | undefined;
+    if (reminderEnabled) {
+      if (frequencyUnit === 'daily' && fv > 1) {
+        reminderTimesToSave = Array.from({ length: fv }, (_, i) => reminderTimes[i] ?? '08:00');
+        reminderTimeToSave = reminderTimesToSave[0];
+      } else if (frequencyUnit === 'weekly') {
+        reminderDaysToSave = [reminderWeekDay];
+        reminderTimeToSave = reminderTime;
+      } else if (frequencyUnit === 'monthly') {
+        const md = parseInt(reminderMonthDay, 10);
+        reminderDaysToSave = [Math.min(Math.max(md, 1), 31)];
+        reminderTimeToSave = reminderTime;
+      } else {
+        reminderTimeToSave = reminderTime;
+      }
+    }
+
     setLoading(true);
     try {
       if (editingMed) {
@@ -95,8 +164,13 @@ export default function MedicationsScreen() {
           type,
           frequencyValue: fv,
           frequencyUnit,
+          endDate,
+          durationValue: type === 'temporary' ? (parseInt(durationValue, 10) || 7) : undefined,
+          durationUnit: type === 'temporary' ? durationUnit : undefined,
           reminderEnabled,
-          reminderTime: reminderEnabled ? reminderTime : undefined,
+          reminderTime: reminderEnabled ? reminderTimeToSave : undefined,
+          reminderTimes: reminderEnabled ? reminderTimesToSave : undefined,
+          reminderDays: reminderEnabled ? reminderDaysToSave : undefined,
           nextDueDate: nextDue ? toTimestamp(nextDue) : undefined,
         });
       } else {
@@ -111,8 +185,13 @@ export default function MedicationsScreen() {
           frequencyValue: fv,
           frequencyUnit,
           startDate: Timestamp.now(),
+          endDate,
+          durationValue: type === 'temporary' ? (parseInt(durationValue, 10) || 7) : undefined,
+          durationUnit: type === 'temporary' ? durationUnit : undefined,
           reminderEnabled,
-          reminderTime: reminderEnabled ? reminderTime : undefined,
+          reminderTime: reminderEnabled ? reminderTimeToSave : undefined,
+          reminderTimes: reminderEnabled ? reminderTimesToSave : undefined,
+          reminderDays: reminderEnabled ? reminderDaysToSave : undefined,
           nextDueDate: nextDue ? toTimestamp(nextDue) : undefined,
           isActive: true,
           createdBy: user!.uid,
@@ -127,14 +206,128 @@ export default function MedicationsScreen() {
     }
   }
 
-  async function handleDeactivate(id: string) {
-    await updateRecord<Medication>(paths.medications(familyId, petId), id, { isActive: false });
+  // Change 4: hard delete with confirmation
+  function handleDelete(med: Medication) {
+    Alert.alert(
+      t('medications.deleteConfirm', { name: med.name }),
+      undefined,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => deleteRecord(paths.medications(familyId, petId), med.id),
+        },
+      ]
+    );
   }
 
   function dosageUnitLabel(unit: string) {
     if (unit === 'pill') return t('medications.pill');
     if (unit === 'ml') return t('medications.ml');
     return t('medications.units_dose');
+  }
+
+  // Change 5: smart reminder JSX helper
+  function renderReminderFields() {
+    const fv = parseInt(frequencyValue, 10) || 1;
+
+    if (frequencyUnit === 'daily' && fv > 1) {
+      return (
+        <>
+          {Array.from({ length: fv }, (_, i) => (
+            <TextInput
+              key={i}
+              label={t('medications.reminderTimeN', { n: i + 1 })}
+              value={reminderTimes[i] ?? '08:00'}
+              onChangeText={(v) => {
+                const updated = [...reminderTimes];
+                updated[i] = v;
+                setReminderTimes(updated);
+              }}
+              mode="outlined"
+              style={styles.input}
+              placeholder="08:00"
+            />
+          ))}
+        </>
+      );
+    }
+
+    if (frequencyUnit === 'weekly') {
+      return (
+        <>
+          <Text style={styles.sectionLabel}>{t('medications.reminderWeekDay')}</Text>
+          <Menu
+            visible={reminderWeekDayMenuVisible}
+            onDismiss={() => setReminderWeekDayMenuVisible(false)}
+            anchor={
+              <Button
+                mode="outlined"
+                onPress={() => setReminderWeekDayMenuVisible(true)}
+                style={[styles.unitButton, { alignSelf: 'flex-start', marginBottom: 8 }]}
+              >
+                {t(`medications.${WEEK_DAYS[reminderWeekDay]}`)}
+              </Button>
+            }
+          >
+            {WEEK_DAYS.map((day, idx) => (
+              <Menu.Item
+                key={day}
+                title={t(`medications.${day}`)}
+                onPress={() => {
+                  setReminderWeekDay(idx);
+                  setReminderWeekDayMenuVisible(false);
+                }}
+              />
+            ))}
+          </Menu>
+          <TextInput
+            label={t('medications.reminderTimeLabel')}
+            value={reminderTime}
+            onChangeText={setReminderTime}
+            mode="outlined"
+            style={styles.input}
+            placeholder="08:00"
+          />
+        </>
+      );
+    }
+
+    if (frequencyUnit === 'monthly') {
+      return (
+        <>
+          <TextInput
+            label={t('medications.reminderMonthDay')}
+            value={reminderMonthDay}
+            onChangeText={setReminderMonthDay}
+            keyboardType="number-pad"
+            mode="outlined"
+            style={styles.input}
+            placeholder="1"
+          />
+          <TextInput
+            label={t('medications.reminderTimeLabel')}
+            value={reminderTime}
+            onChangeText={setReminderTime}
+            mode="outlined"
+            style={styles.input}
+            placeholder="08:00"
+          />
+        </>
+      );
+    }
+
+    return (
+      <TextInput
+        label={t('medications.reminderTimeLabel')}
+        value={reminderTime}
+        onChangeText={setReminderTime}
+        mode="outlined"
+        style={styles.input}
+        placeholder="08:00"
+      />
+    );
   }
 
   return (
@@ -155,6 +348,7 @@ export default function MedicationsScreen() {
                         {t(`medications.${m.type}`)}
                       </Chip>
                       <IconButton icon="pencil" size={18} onPress={() => openEdit(m)} />
+                      <IconButton icon="delete" size={18} iconColor={Colors.danger} onPress={() => handleDelete(m)} />
                     </View>
                   )}
                 />
@@ -169,15 +363,6 @@ export default function MedicationsScreen() {
                     {m.frequencyUnit !== 'as_needed' ? ` ×${m.frequencyValue}` : ''}
                   </Text>
                 </Card.Content>
-                <Card.Actions>
-                  <Button
-                    compact
-                    textColor={Colors.danger}
-                    onPress={() => handleDeactivate(m.id)}
-                  >
-                    {t('medications.inactive')}
-                  </Button>
-                </Card.Actions>
               </Card>
             ))
           }
@@ -243,6 +428,46 @@ export default function MedicationsScreen() {
                   style={styles.segment}
                 />
 
+                {/* Change 1: Duration for temporary */}
+                {type === 'temporary' && (
+                  <View>
+                    <Text style={styles.sectionLabel}>{t('medications.duration')}</Text>
+                    <View style={styles.dosageRow}>
+                      <TextInput
+                        label={t('medications.duration')}
+                        value={durationValue}
+                        onChangeText={setDurationValue}
+                        keyboardType="number-pad"
+                        mode="outlined"
+                        style={styles.dosageInput}
+                      />
+                      <Menu
+                        visible={durationMenuVisible}
+                        onDismiss={() => setDurationMenuVisible(false)}
+                        anchor={
+                          <Button
+                            mode="outlined"
+                            onPress={() => setDurationMenuVisible(true)}
+                            style={styles.unitButton}
+                          >
+                            {t(`medications.${durationUnit}`)}
+                          </Button>
+                        }
+                      >
+                        <Menu.Item
+                          title={t('medications.days')}
+                          onPress={() => { setDurationUnit('days'); setDurationMenuVisible(false); }}
+                        />
+                        <Menu.Item
+                          title={t('medications.weeks')}
+                          onPress={() => { setDurationUnit('weeks'); setDurationMenuVisible(false); }}
+                        />
+                      </Menu>
+                    </View>
+                  </View>
+                )}
+
+                {/* Change 2: Two-row frequency layout */}
                 <Text style={styles.sectionLabel}>{t('medications.frequency')}</Text>
                 <SegmentedButtons
                   value={frequencyUnit}
@@ -250,6 +475,13 @@ export default function MedicationsScreen() {
                   buttons={[
                     { value: 'daily', label: t('medications.daily') },
                     { value: 'weekly', label: t('medications.weekly') },
+                  ]}
+                  style={[styles.segment, { marginBottom: 4 }]}
+                />
+                <SegmentedButtons
+                  value={frequencyUnit}
+                  onValueChange={(v) => setFrequencyUnit(v as FrequencyUnit)}
+                  buttons={[
                     { value: 'monthly', label: t('medications.monthly') },
                     { value: 'as_needed', label: t('medications.as_needed') },
                   ]}
@@ -276,16 +508,8 @@ export default function MedicationsScreen() {
                     />
                   )}
                 />
-                {reminderEnabled && (
-                  <TextInput
-                    label={t('medications.reminderTimeLabel')}
-                    value={reminderTime}
-                    onChangeText={setReminderTime}
-                    mode="outlined"
-                    style={styles.input}
-                    placeholder="08:00"
-                  />
-                )}
+                {/* Change 5: smart reminder fields */}
+                {reminderEnabled && renderReminderFields()}
 
                 {error ? <HelperText type="error">{error}</HelperText> : null}
               </ScrollView>

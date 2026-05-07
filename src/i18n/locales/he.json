@@ -107,7 +107,21 @@
     "monthly": "חודשי",
     "as_needed": "לפי הצורך",
     "reminderEnabled": "הפעל תזכורת",
-    "reminderTimeLabel": "שעת תזכורת (HH:MM)"
+    "reminderTimeLabel": "שעת תזכורת (HH:MM)",
+    "duration": "משך זמן",
+    "days": "ימים",
+    "weeks": "שבועות",
+    "deleteConfirm": "למחוק את \"{{name}}\"?",
+    "reminderTimeN": "שעת תזכורת {{n}}",
+    "reminderWeekDay": "יום בשבוע",
+    "reminderMonthDay": "יום בחודש (1–31)",
+    "sunday": "ראשון",
+    "monday": "שני",
+    "tuesday": "שלישי",
+    "wednesday": "רביעי",
+    "thursday": "חמישי",
+    "friday": "שישי",
+    "saturday": "שבת"
   },
   "vaccines": {
     "title": "חיסונים",
