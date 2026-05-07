@@ -6,7 +6,7 @@ import {
 } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Timestamp, where } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 import {
   subscribeToCollection, addRecord, updateRecord, deleteRecord, paths,
 } from '../../../src/services/firebase/firestore';
@@ -55,12 +55,11 @@ export default function MedicationsScreen() {
   const [reminderWeekDayMenuVisible, setReminderWeekDayMenuVisible] = useState(false);
   const [reminderMonthDay, setReminderMonthDay] = useState('1');
 
-  // Change 3: client-side sort, no orderBy needed
   useEffect(() => {
     if (!familyId || !petId) return;
     return subscribeToCollection<Medication>(
       paths.medications(familyId, petId),
-      [where('isActive', '==', true)],
+      [],
       (items) => {
         const sorted = [...items].sort(
           (a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()
@@ -206,7 +205,6 @@ export default function MedicationsScreen() {
     }
   }
 
-  // Change 4: hard delete with confirmation
   function handleDelete(med: Medication) {
     Alert.alert(
       t('medications.deleteConfirm', { name: med.name }),
@@ -220,6 +218,10 @@ export default function MedicationsScreen() {
         },
       ]
     );
+  }
+
+  function handleToggleActive(med: Medication) {
+    updateRecord<Medication>(paths.medications(familyId, petId), med.id, { isActive: !med.isActive });
   }
 
   function dosageUnitLabel(unit: string) {
@@ -338,7 +340,7 @@ export default function MedicationsScreen() {
           {meds.length === 0
             ? <Text style={styles.empty}>{t('medications.noMedications')}</Text>
             : meds.map((m) => (
-              <Card key={m.id} style={styles.card}>
+              <Card key={m.id} style={[styles.card, !m.isActive && styles.inactiveCard]}>
                 <Card.Title
                   title={m.name}
                   subtitle={`${m.dosage}${m.dosageUnit ? ' ' + dosageUnitLabel(m.dosageUnit) : ''}`}
@@ -347,6 +349,12 @@ export default function MedicationsScreen() {
                       <Chip compact style={m.type === 'regular' ? styles.regularChip : styles.tempChip}>
                         {t(`medications.${m.type}`)}
                       </Chip>
+                      <IconButton
+                        icon={m.isActive ? 'toggle-switch' : 'toggle-switch-off'}
+                        size={18}
+                        iconColor={m.isActive ? Colors.primary : Colors.textSecondary}
+                        onPress={() => handleToggleActive(m)}
+                      />
                       <IconButton icon="pencil" size={18} onPress={() => openEdit(m)} />
                       <IconButton icon="delete" size={18} iconColor={Colors.danger} onPress={() => handleDelete(m)} />
                     </View>
@@ -532,6 +540,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16, paddingBottom: 100 },
   card: { marginBottom: 8 },
+  inactiveCard: { opacity: 0.5 },
   cardActions: { flexDirection: 'row', alignItems: 'center', marginRight: 4 },
   empty: { textAlign: 'center', color: Colors.textSecondary, marginTop: 40 },
   fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: Colors.primary },

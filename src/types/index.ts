@@ -164,6 +164,7 @@ export interface Treatment {
   treatmentDate: Timestamp;
   nextDueDate?: Timestamp;
   dosage?: string;
+  otherType?: string;
   reminderEnabled: boolean;
   reminderDaysBeforeDue: number;
   notes?: string;

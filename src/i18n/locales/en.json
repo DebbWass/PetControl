@@ -159,7 +159,9 @@
     "reminderEnabled": "Reminder for Next Treatment",
     "reminderDays": "Days Before Reminder",
     "dosage": "Dosage",
-    "noTreatments": "No treatments yet"
+    "noTreatments": "No treatments yet",
+    "deleteConfirm": "Delete treatment {{name}}?",
+    "otherType": "Specify treatment type"
   },
   "appointments": {
     "title": "Appointments",

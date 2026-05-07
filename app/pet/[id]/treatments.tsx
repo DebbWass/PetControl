@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import {
   Text, FAB, Card, Chip, Button, TextInput, HelperText,
-  Dialog, Portal, SegmentedButtons, Switch, List,
+  Dialog, Portal, SegmentedButtons, Switch, List, IconButton,
 } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Timestamp, orderBy } from 'firebase/firestore';
 import { format, parse, isValid } from 'date-fns';
-import { subscribeToCollection, addRecord, paths } from '../../../src/services/firebase/firestore';
+import {
+  subscribeToCollection, addRecord, updateRecord, deleteRecord, paths,
+} from '../../../src/services/firebase/firestore';
 import { useAuthStore } from '../../../src/store/authStore';
 import { Colors } from '../../../src/constants/colors';
 import { Treatment, TreatmentCategory } from '../../../src/types';
@@ -25,7 +27,7 @@ function parseDateStr(s: string): Date | null {
 }
 
 function defaultNextDate(category: TreatmentCategory): string {
-  const days = category === 'deworming' ? 90 : category === 'heartworm' ? 30 : 30;
+  const days = category === 'deworming' ? 90 : 30;
   const d = new Date();
   d.setDate(d.getDate() + days);
   return format(d, 'dd/MM/yyyy');
@@ -39,10 +41,12 @@ export default function TreatmentsScreen() {
 
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
+  const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
 
   // Form fields
   const [product, setProduct] = useState('');
   const [category, setCategory] = useState<TreatmentCategory>('flea_tick');
+  const [otherTypeInput, setOtherTypeInput] = useState('');
   const [treatmentDateInput, setTreatmentDateInput] = useState(todayStr());
   const [dosageInput, setDosageInput] = useState('');
   const [notesInput, setNotesInput] = useState('');
@@ -69,8 +73,10 @@ export default function TreatmentsScreen() {
   }, [familyId, petId]);
 
   function reset() {
+    setEditingTreatment(null);
     setProduct('');
     setCategory('flea_tick');
+    setOtherTypeInput('');
     setTreatmentDateInput(todayStr());
     setDosageInput('');
     setNotesInput('');
@@ -82,14 +88,49 @@ export default function TreatmentsScreen() {
     setError('');
   }
 
-  // When category changes, suggest a new next-due date
   function handleCategoryChange(cat: TreatmentCategory) {
     setCategory(cat);
     setNextCategory(cat);
     setNextDueDateInput(defaultNextDate(cat));
   }
 
-  async function handleAdd() {
+  function openEdit(tr: Treatment) {
+    setEditingTreatment(tr);
+    setProduct(tr.productName);
+    setCategory(tr.category);
+    setOtherTypeInput(tr.otherType ?? '');
+    setTreatmentDateInput(format(tr.treatmentDate.toDate(), 'dd/MM/yyyy'));
+    setDosageInput(tr.dosage ?? '');
+    setNotesInput(tr.notes ?? '');
+    setHasNextTreatment(!!tr.nextDueDate);
+    setNextCategory(tr.category);
+    setNextDueDateInput(
+      tr.nextDueDate
+        ? format(tr.nextDueDate.toDate(), 'dd/MM/yyyy')
+        : defaultNextDate(tr.category)
+    );
+    setReminderEnabled(tr.reminderEnabled);
+    setReminderDays(String(tr.reminderDaysBeforeDue));
+    setError('');
+    setDialogVisible(true);
+  }
+
+  function handleDelete(tr: Treatment) {
+    Alert.alert(
+      t('treatments.deleteConfirm', { name: tr.productName }),
+      undefined,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => deleteRecord(paths.treatments(familyId, petId), tr.id),
+        },
+      ]
+    );
+  }
+
+  async function handleSave() {
     if (!product.trim()) { setError(t('common.required')); return; }
 
     const treatmentDate = parseDateStr(treatmentDateInput);
@@ -102,21 +143,30 @@ export default function TreatmentsScreen() {
       nextDueTimestamp = Timestamp.fromDate(nextDate);
     }
 
+    const payload = {
+      category,
+      productName: product.trim(),
+      otherType: category === 'other' ? (otherTypeInput.trim() || undefined) : undefined,
+      treatmentDate: Timestamp.fromDate(treatmentDate),
+      nextDueDate: nextDueTimestamp,
+      dosage: dosageInput.trim() || undefined,
+      notes: notesInput.trim() || undefined,
+      reminderEnabled: hasNextTreatment && reminderEnabled,
+      reminderDaysBeforeDue: hasNextTreatment && reminderEnabled ? (parseInt(reminderDays, 10) || 7) : 7,
+    };
+
     setLoading(true);
     try {
-      await addRecord<Treatment>(paths.treatments(familyId, petId), {
-        petId,
-        familyId,
-        category,
-        productName: product.trim(),
-        treatmentDate: Timestamp.fromDate(treatmentDate),
-        nextDueDate: nextDueTimestamp,
-        dosage: dosageInput.trim() || undefined,
-        notes: notesInput.trim() || undefined,
-        reminderEnabled: hasNextTreatment && reminderEnabled,
-        reminderDaysBeforeDue: hasNextTreatment && reminderEnabled ? (parseInt(reminderDays, 10) || 7) : 7,
-        createdBy: user!.uid,
-      });
+      if (editingTreatment) {
+        await updateRecord<Treatment>(paths.treatments(familyId, petId), editingTreatment.id, payload);
+      } else {
+        await addRecord<Treatment>(paths.treatments(familyId, petId), {
+          petId,
+          familyId,
+          ...payload,
+          createdBy: user!.uid,
+        });
+      }
       setDialogVisible(false);
       reset();
     } catch (e: any) {
@@ -124,6 +174,11 @@ export default function TreatmentsScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function categoryLabel(tr: Treatment): string {
+    if (tr.category === 'other' && tr.otherType) return tr.otherType;
+    return t(`treatments.${tr.category}`);
   }
 
   return (
@@ -139,7 +194,11 @@ export default function TreatmentsScreen() {
                   title={tr.productName}
                   subtitle={`${formatDate(tr.treatmentDate)}${tr.nextDueDate ? ` → ${t('treatments.nextDue')}: ${formatDate(tr.nextDueDate)}` : ''}`}
                   right={() => (
-                    <Chip compact style={styles.chip}>{t(`treatments.${tr.category}`)}</Chip>
+                    <View style={styles.cardActions}>
+                      <Chip compact style={styles.chip}>{categoryLabel(tr)}</Chip>
+                      <IconButton icon="pencil" size={18} onPress={() => openEdit(tr)} />
+                      <IconButton icon="delete" size={18} iconColor={Colors.danger} onPress={() => handleDelete(tr)} />
+                    </View>
                   )}
                 />
                 {(tr.dosage || tr.notes) ? (
@@ -157,7 +216,7 @@ export default function TreatmentsScreen() {
 
         <Portal>
           <Dialog visible={dialogVisible} onDismiss={() => { setDialogVisible(false); reset(); }}>
-            <Dialog.Title>{t('treatments.add')}</Dialog.Title>
+            <Dialog.Title>{editingTreatment ? t('common.edit') : t('treatments.add')}</Dialog.Title>
             <KeyboardAvoidingView behavior={Platform.OS === 'android' ? 'padding' : 'height'}>
             <Dialog.ScrollArea style={styles.scrollArea}>
               <ScrollView keyboardShouldPersistTaps="handled">
@@ -173,6 +232,17 @@ export default function TreatmentsScreen() {
                   ]}
                   style={styles.segment}
                 />
+
+                {/* Custom type when "Other" is selected */}
+                {category === 'other' && (
+                  <TextInput
+                    label={t('treatments.otherType')}
+                    value={otherTypeInput}
+                    onChangeText={setOtherTypeInput}
+                    mode="outlined"
+                    style={styles.input}
+                  />
+                )}
 
                 {/* Product */}
                 <TextInput
@@ -274,7 +344,7 @@ export default function TreatmentsScreen() {
             </KeyboardAvoidingView>
             <Dialog.Actions>
               <Button onPress={() => { setDialogVisible(false); reset(); }}>{t('common.cancel')}</Button>
-              <Button onPress={handleAdd} loading={loading} textColor={Colors.primary}>{t('common.save')}</Button>
+              <Button onPress={handleSave} loading={loading} textColor={Colors.primary}>{t('common.save')}</Button>
             </Dialog.Actions>
           </Dialog>
         </Portal>
@@ -287,11 +357,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16, paddingBottom: 100 },
   card: { marginBottom: 8 },
+  cardActions: { flexDirection: 'row', alignItems: 'center', marginRight: 4 },
   empty: { textAlign: 'center', color: Colors.textSecondary, marginTop: 40 },
   fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: Colors.primary },
   input: { marginBottom: 8 },
   segment: { marginBottom: 12 },
-  chip: { marginRight: 8, backgroundColor: Colors.primaryLight },
+  chip: { marginRight: 4, backgroundColor: Colors.primaryLight },
   sectionLabel: { color: Colors.textSecondary, fontSize: 12, marginBottom: 6, marginTop: 4 },
   subText: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
   scrollArea: { maxHeight: 500 },
