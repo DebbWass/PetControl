@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isFamilyMember(familyId) {
+      return request.auth != null &&
+        request.auth.uid in
+          firestore.get(/databases/(default)/documents/families/$(familyId)).data.memberUids;
+    }
+
+    // Pet profile photos stored directly under pets/{petId}/ (e.g. photo.jpg)
+    match /families/{familyId}/pets/{petId}/{photoFile} {
+      allow read:  if isFamilyMember(familyId);
+      allow write: if isFamilyMember(familyId)
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Medical / document uploads under pets/{petId}/documents/
+    match /families/{familyId}/pets/{petId}/documents/{filename} {
+      allow read:  if isFamilyMember(familyId);
+      allow write: if isFamilyMember(familyId)
+                   && request.resource.size < 20 * 1024 * 1024;
+    }
+
+    // Deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
