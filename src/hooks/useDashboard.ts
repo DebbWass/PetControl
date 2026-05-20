@@ -18,6 +18,8 @@ export interface DashboardTask {
   scheduledDate: Date;
   daysUntil: number;
   route: string;
+  /** HH:MM display string — present when a specific time is known (e.g. reminderTime on medications) */
+  timeLabel?: string;
 }
 
 export interface DashboardData {
@@ -72,7 +74,7 @@ export function useDashboard(): DashboardData {
             )
           );
           medsSnap.docs.forEach((d) => {
-            const m = d.data() as Medication;
+            const m = { id: d.id, ...d.data() } as Medication;
             const dueDate = m.nextDueDate?.toDate();
             if (!dueDate) return;
             const days = differenceInCalendarDays(dueDate, now);
@@ -80,6 +82,7 @@ export function useDashboard(): DashboardData {
               petId, petName: pet.name, type: 'medication',
               label: m.name, scheduledDate: dueDate, daysUntil: days,
               route: route('medications'),
+              timeLabel: m.reminderTime,
             });
           });
         } catch { /* index may not exist yet during development */ }
@@ -144,10 +147,13 @@ export function useDashboard(): DashboardData {
             const aptDate = a.scheduledDate?.toDate();
             if (!aptDate) return;
             const days = differenceInCalendarDays(aptDate, now);
+            const hh = aptDate.getHours().toString().padStart(2, '0');
+            const mm = aptDate.getMinutes().toString().padStart(2, '0');
             allTasks.push({
               petId, petName: pet.name, type: 'appointment',
               label: a.title, scheduledDate: aptDate, daysUntil: days,
               route: route('appointments'),
+              timeLabel: `${hh}:${mm}`,
             });
           });
         } catch { /* skip */ }

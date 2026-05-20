@@ -57,7 +57,7 @@ export default function LoginScreen() {
         await AsyncStorage.removeItem(CREDENTIALS_KEY);
       }
 
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     } catch (e: any) {
       setError(e.message ?? t('common.error'));
     } finally {

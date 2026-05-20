@@ -129,7 +129,11 @@ users/{userId}              # Top-level index: uid → familyId (login lookup)
 - Health sub-records (medications, vaccines, etc.) are fetched on demand via hooks, not stored globally.
 
 ### Notifications – two layers
-1. **Local** (`expo-notifications`): scheduled on-device when saving a medication. Works offline.
+1. **Local** (`expo-notifications`): scheduled on-device at the exact `reminderTime` the user entered.
+   - `scheduleOneMedicationReminder(med)` — called immediately after save/update in `medications.tsx`. Uses a per-medication map in AsyncStorage (`@petcontrol:med_notif_map`) so changing one medication never disrupts others.
+   - `cancelMedicationReminder(medId)` — called before `deleteRecord` in `medications.tsx`.
+   - `scheduleLocalMedicationReminders(meds[])` — full reschedule at app boot inside `NotificationBootstrapper` in `_layout.tsx` (fires whenever `user` + `pets` are available).
+   - Supports both single `reminderTime` and multi-dose `reminderTimes[]` — each time slot gets its own daily DAILY-trigger notification.
 2. **Cloud** (`functions/src/index.ts`): Cloud Scheduler → Firebase Function → FCM multicast to all family members' devices, daily at 07:00.
 
 ### FCM tokens

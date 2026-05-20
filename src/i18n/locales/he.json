@@ -215,7 +215,8 @@
     "noReminders": "אין תזכורות קרובות",
     "daysLeft": "{{count}} ימים",
     "tomorrow": "מחר",
-    "todayLabel": "היום"
+    "todayLabel": "היום",
+    "todayAt": "היום בשעה {{time}}"
   },
   "dashboard": {
     "title": "שלום!",

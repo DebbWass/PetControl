@@ -215,7 +215,8 @@
     "noReminders": "No upcoming reminders",
     "daysLeft": "{{count}} days",
     "tomorrow": "Tomorrow",
-    "todayLabel": "Today"
+    "todayLabel": "Today",
+    "todayAt": "Today at {{time}}"
   },
   "dashboard": {
     "title": "Hello!",
