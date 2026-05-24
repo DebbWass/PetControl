@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { ScrollView, View, StyleSheet } from 'react-native';
 import {
-  Text, List, Divider, ActivityIndicator, FAB, Portal, Dialog, Button,
+  Text, List, Divider, ActivityIndicator, FAB, Portal, Dialog, Button, IconButton,
 } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import { he as heLocale, enUS } from 'date-fns/locale';
-import { useDashboard, DashboardTask } from '../../src/hooks/useDashboard';
+import { useDashboard, DashboardTask, markMedicationDone } from '../../src/hooks/useDashboard';
 import { usePets } from '../../src/hooks/usePets';
+import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_MAP } from '../../src/constants/species';
 
@@ -25,8 +26,9 @@ function iconForType(type: DashboardTask['type']): string {
 export default function RemindersScreen() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'he' ? heLocale : enUS;
-  const { today, upcoming7, overdue, isLoading } = useDashboard();
+  const { today, upcoming7, overdue, isLoading, refresh } = useDashboard();
   const pets = usePets();
+  const user = useAuthStore((s) => s.user);
 
   const [addDialogVisible, setAddDialogVisible] = useState(false);
 
@@ -42,7 +44,23 @@ export default function RemindersScreen() {
         description={format(task.scheduledDate, 'dd/MM/yyyy', { locale }) + timeStr}
         left={(props) => <List.Icon {...props} icon={iconForType(task.type)} />}
         onPress={() => router.push(task.route as any)}
-        right={(props) => <List.Icon {...props} icon="chevron-right" />}
+        right={(props) => (
+          <View style={styles.taskRight}>
+            {task.type === 'medication' && (
+              <IconButton
+                icon="check-circle-outline"
+                iconColor="#4CAF50"
+                size={22}
+                onPress={async () => {
+                  if (!user?.familyId) return;
+                  await markMedicationDone(user.familyId, task).catch(() => {});
+                  refresh();
+                }}
+              />
+            )}
+            <List.Icon {...props} icon="chevron-right" />
+          </View>
+        )}
       />
     );
   }
@@ -153,4 +171,5 @@ const styles = StyleSheet.create({
   petButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   petBtn: { borderColor: Colors.primary },
   noPets: { textAlign: 'center', color: Colors.textSecondary, paddingVertical: 20 },
+  taskRight: { flexDirection: 'row', alignItems: 'center' },
 });
