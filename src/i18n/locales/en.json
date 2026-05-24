@@ -216,7 +216,11 @@
     "daysLeft": "{{count}} days",
     "tomorrow": "Tomorrow",
     "todayLabel": "Today",
-    "todayAt": "Today at {{time}}"
+    "todayAt": "Today at {{time}}",
+    "addReminder": "Add Reminder",
+    "selectPet": "Select a pet to add a reminder",
+    "addMedication": "Medication",
+    "addAppointment": "Appointment"
   },
   "dashboard": {
     "title": "Hello!",

@@ -6,6 +6,7 @@ import {
 } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { usePet } from '../../../src/hooks/usePets';
+import { DateTimeInput } from '../../../src/components/DateTimeInput';
 import { useTranslation } from 'react-i18next';
 import { Timestamp, where } from 'firebase/firestore';
 import {
@@ -70,7 +71,7 @@ export default function MedicationsScreen() {
       [where('isActive', '==', true)],
       (items) => {
         const sorted = [...items].sort(
-          (a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()
+          (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
         );
         setMeds(sorted);
       }
@@ -291,26 +292,25 @@ export default function MedicationsScreen() {
     return t('medications.units_dose');
   }
 
-  // Change 5: smart reminder JSX helper
+  // Smart reminder JSX helper — all time fields use the native clock picker
   function renderReminderFields() {
     const fv = parseInt(frequencyValue, 10) || 1;
 
     if (frequencyUnit === 'daily' && fv > 1) {
+      // Multiple doses per day — one clock picker per dose
       return (
         <>
           {Array.from({ length: fv }, (_, i) => (
-            <TextInput
+            <DateTimeInput
               key={i}
               label={t('medications.reminderTimeN', { n: i + 1 })}
               value={reminderTimes[i] ?? '08:00'}
-              onChangeText={(v) => {
+              onChange={(v) => {
                 const updated = [...reminderTimes];
                 updated[i] = v;
                 setReminderTimes(updated);
               }}
-              mode="outlined"
-              style={styles.input}
-              placeholder="08:00"
+              mode="time"
             />
           ))}
         </>
@@ -345,13 +345,11 @@ export default function MedicationsScreen() {
               />
             ))}
           </Menu>
-          <TextInput
+          <DateTimeInput
             label={t('medications.reminderTimeLabel')}
             value={reminderTime}
-            onChangeText={setReminderTime}
-            mode="outlined"
-            style={styles.input}
-            placeholder="08:00"
+            onChange={setReminderTime}
+            mode="time"
           />
         </>
       );
@@ -369,26 +367,23 @@ export default function MedicationsScreen() {
             style={styles.input}
             placeholder="1"
           />
-          <TextInput
+          <DateTimeInput
             label={t('medications.reminderTimeLabel')}
             value={reminderTime}
-            onChangeText={setReminderTime}
-            mode="outlined"
-            style={styles.input}
-            placeholder="08:00"
+            onChange={setReminderTime}
+            mode="time"
           />
         </>
       );
     }
 
+    // Default: single daily reminder time
     return (
-      <TextInput
+      <DateTimeInput
         label={t('medications.reminderTimeLabel')}
         value={reminderTime}
-        onChangeText={setReminderTime}
-        mode="outlined"
-        style={styles.input}
-        placeholder="08:00"
+        onChange={setReminderTime}
+        mode="time"
       />
     );
   }

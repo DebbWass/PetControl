@@ -216,7 +216,11 @@
     "daysLeft": "{{count}} ימים",
     "tomorrow": "מחר",
     "todayLabel": "היום",
-    "todayAt": "היום בשעה {{time}}"
+    "todayAt": "היום בשעה {{time}}",
+    "addReminder": "הוסף תזכורת",
+    "selectPet": "בחר חיה להוספת תזכורת",
+    "addMedication": "תרופה",
+    "addAppointment": "תור"
   },
   "dashboard": {
     "title": "שלום!",

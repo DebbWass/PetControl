@@ -62,21 +62,21 @@ export function useDashboard(): DashboardData {
         const petId = pet.id;
         const route = (sub: string) => `/pet/${petId}/${sub}`;
 
-        // ── Medications with nextDueDate within 7 days ──────────────
+        // ── Medications: overdue + today + upcoming 7 days ──────────
+        // Query only by isActive (single-field index, always available).
+        // Date filtering is done client-side to avoid composite index issues.
         try {
           const medsSnap = await getDocs(
             query(
               collection(db, paths.medications(familyId, petId)),
-              where('isActive', '==', true),
-              where('nextDueDate', '>=', Timestamp.fromDate(todayStart)),
-              where('nextDueDate', '<=', Timestamp.fromDate(sevenDaysEnd)),
-              orderBy('nextDueDate', 'asc')
+              where('isActive', '==', true)
             )
           );
           medsSnap.docs.forEach((d) => {
             const m = { id: d.id, ...d.data() } as Medication;
             const dueDate = m.nextDueDate?.toDate();
             if (!dueDate) return;
+            if (dueDate > sevenDaysEnd) return; // too far ahead — skip
             const days = differenceInCalendarDays(dueDate, now);
             allTasks.push({
               petId, petName: pet.name, type: 'medication',
@@ -85,7 +85,7 @@ export function useDashboard(): DashboardData {
               timeLabel: m.reminderTime,
             });
           });
-        } catch { /* index may not exist yet during development */ }
+        } catch { /* skip */ }
 
         // ── Vaccines due soon (within 7 days or overdue) ────────────
         try {
@@ -132,11 +132,13 @@ export function useDashboard(): DashboardData {
         } catch { /* skip */ }
 
         // ── Appointments today through 7 days ───────────────────────
+        // Range on scheduledDate only (no equality filter on another field)
+        // so Firestore handles it with a single-field index. Status is
+        // filtered client-side to avoid requiring a composite index.
         try {
           const aptSnap = await getDocs(
             query(
               collection(db, paths.appointments(familyId, petId)),
-              where('status', '==', 'scheduled'),
               where('scheduledDate', '>=', Timestamp.fromDate(todayStart)),
               where('scheduledDate', '<=', Timestamp.fromDate(sevenDaysEnd)),
               orderBy('scheduledDate', 'asc')
@@ -144,6 +146,7 @@ export function useDashboard(): DashboardData {
           );
           aptSnap.docs.forEach((d) => {
             const a = d.data() as Appointment;
+            if (a.status !== 'scheduled') return; // client-side filter
             const aptDate = a.scheduledDate?.toDate();
             if (!aptDate) return;
             const days = differenceInCalendarDays(aptDate, now);
