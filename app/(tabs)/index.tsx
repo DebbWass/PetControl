@@ -1,5 +1,5 @@
-import { ScrollView, StyleSheet } from 'react-native';
-import { Text, Card, Chip, ActivityIndicator, List } from 'react-native-paper';
+import { ScrollView, StyleSheet, View, Image, TouchableOpacity } from 'react-native';
+import { Text, Card, ActivityIndicator, List } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { usePets } from '../../src/hooks/usePets';
@@ -84,23 +84,35 @@ export default function HomeScreen() {
         </Card>
       )}
 
-      {/* Pet quick-access strip */}
+      {/* Pet quick-access grid */}
       <Text variant="titleMedium" style={styles.sectionTitle}>
         {t('tabs.pets')} ({pets.length})
       </Text>
       {pets.length === 0 ? (
         <Text style={styles.muted}>{t('pets.noPets')}</Text>
       ) : (
-        pets.slice(0, 6).map((pet) => (
-          <Chip
-            key={pet.id}
-            style={styles.petChip}
-            icon={() => <Text>{SPECIES_MAP[pet.species]?.emoji ?? '🐾'}</Text>}
-            onPress={() => router.push(`/pet/${pet.id}` as any)}
-          >
-            {pet.name}
-          </Chip>
-        ))
+        <View style={styles.petGrid}>
+          {pets.map((pet) => (
+            <TouchableOpacity
+              key={pet.id}
+              style={styles.petItem}
+              onPress={() => router.push(`/pet/${pet.id}` as any)}
+            >
+              {pet.photoUrl ? (
+                <Image source={{ uri: pet.photoUrl }} style={styles.petCircle} />
+              ) : (
+                <View style={[styles.petCircle, styles.petCircleFallback]}>
+                  <Text style={styles.petEmoji}>
+                    {SPECIES_MAP[pet.species]?.emoji ?? '🐾'}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.petName} numberOfLines={1}>
+                {pet.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       )}
     </ScrollView>
   );
@@ -115,6 +127,11 @@ const styles = StyleSheet.create({
   loader: { marginVertical: 12 },
   sectionTitle: { marginBottom: 8, marginTop: 4 },
   muted: { color: Colors.textSecondary, marginTop: 4, marginBottom: 8 },
-  petChip: { marginBottom: 6, alignSelf: 'flex-start' },
   taskTitle: { fontSize: 14 },
+  petGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 },
+  petItem: { width: '33.33%', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
+  petCircle: { width: 70, height: 70, borderRadius: 35 },
+  petCircleFallback: { backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
+  petEmoji: { fontSize: 32 },
+  petName: { fontSize: 12, marginTop: 6, textAlign: 'center', color: Colors.text },
 });
