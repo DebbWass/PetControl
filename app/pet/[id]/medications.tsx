@@ -5,6 +5,8 @@ import {
   Dialog, Portal, SegmentedButtons, Switch, List, IconButton, Menu,
 } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
+import { usePet } from '../../../src/hooks/usePets';
+import { DateTimeInput } from '../../../src/components/DateTimeInput';
 import { useTranslation } from 'react-i18next';
 import { Timestamp, where } from 'firebase/firestore';
 import {
@@ -16,7 +18,11 @@ import { Medication, MedicationType, FrequencyUnit } from '../../../src/types';
 import { formatDate } from '../../../src/utils/dateUtils';
 import { calcMedicationNextDue } from '../../../src/utils/medicationUtils';
 import { toTimestamp } from '../../../src/utils/dateUtils';
-import { addDays, addWeeks } from 'date-fns';
+import { addDays, addWeeks, setHours, setMinutes } from 'date-fns';
+import {
+  scheduleOneMedicationReminder,
+  cancelMedicationReminder,
+} from '../../../src/services/notifications';
 
 const DOSAGE_UNITS = ['pill', 'ml', 'units_dose'] as const;
 const WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
@@ -26,6 +32,8 @@ export default function MedicationsScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const familyId = user?.familyId ?? '';
+  const pet = usePet(petId ?? '');
+  const petName = pet?.name ?? '';
 
   const [meds, setMeds] = useState<Medication[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
@@ -63,7 +71,7 @@ export default function MedicationsScreen() {
       [where('isActive', '==', true)],
       (items) => {
         const sorted = [...items].sort(
-          (a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()
+          (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
         );
         setMeds(sorted);
       }
@@ -125,7 +133,7 @@ export default function MedicationsScreen() {
     }
     const fv = parseInt(frequencyValue, 10) || 1;
 
-    // Change 1: endDate for temporary
+    // endDate for temporary medications
     let endDate: Timestamp | undefined;
     if (type === 'temporary') {
       const dv = parseInt(durationValue, 10) || 7;
@@ -133,7 +141,7 @@ export default function MedicationsScreen() {
       endDate = Timestamp.fromDate(endDateObj);
     }
 
-    // Change 5: smart reminder fields
+    // Smart reminder fields
     let reminderTimeToSave: string | undefined;
     let reminderTimesToSave: string[] | undefined;
     let reminderDaysToSave: number[] | undefined;
@@ -153,10 +161,36 @@ export default function MedicationsScreen() {
       }
     }
 
+    // Compute nextDueDate:
+    // – For daily medications with a known reminderTime, check whether today's
+    //   time is still in the future; if so, schedule for TODAY so the task
+    //   appears in "today's tasks" immediately after saving.
+    // – For all other frequencies, apply calcMedicationNextDue and set the time.
+    const now = new Date();
+    let nextDue: Date | null;
+
+    if (reminderEnabled && reminderTimeToSave && frequencyUnit !== 'as_needed') {
+      const [h, m] = reminderTimeToSave.split(':').map(Number);
+      const hour = isNaN(h) ? 8 : h;
+      const minute = isNaN(m) ? 0 : m;
+
+      if (frequencyUnit === 'daily') {
+        const todayAtTime = setHours(setMinutes(now, minute), hour);
+        nextDue = todayAtTime > now
+          ? todayAtTime
+          : setHours(setMinutes(addDays(now, fv), minute), hour);
+      } else {
+        const raw = calcMedicationNextDue(now, fv, frequencyUnit);
+        nextDue = raw ? setHours(setMinutes(raw, minute), hour) : null;
+      }
+    } else {
+      nextDue = calcMedicationNextDue(now, fv, frequencyUnit);
+    }
+    const nextDueTimestamp = nextDue ? toTimestamp(nextDue) : undefined;
+
     setLoading(true);
     try {
       if (editingMed) {
-        const nextDue = calcMedicationNextDue(new Date(), fv, frequencyUnit);
         await updateRecord<Medication>(paths.medications(familyId, petId), editingMed.id, {
           name: nameInput.trim(),
           dosage: dosageInput.trim(),
@@ -171,11 +205,22 @@ export default function MedicationsScreen() {
           reminderTime: reminderEnabled ? reminderTimeToSave : undefined,
           reminderTimes: reminderEnabled ? reminderTimesToSave : undefined,
           reminderDays: reminderEnabled ? reminderDaysToSave : undefined,
-          nextDueDate: nextDue ? toTimestamp(nextDue) : undefined,
+          nextDueDate: nextDueTimestamp,
         });
+        // Reschedule local notification immediately for the edited medication
+        scheduleOneMedicationReminder({
+          ...editingMed,
+          name: nameInput.trim(),
+          dosage: dosageInput.trim(),
+          isActive: true,
+          reminderEnabled,
+          reminderTime: reminderEnabled ? reminderTimeToSave : undefined,
+          reminderTimes: reminderEnabled ? reminderTimesToSave : undefined,
+          frequencyUnit,
+          frequencyValue: fv,
+        } as Medication, petName).catch(() => {});
       } else {
-        const nextDue = calcMedicationNextDue(new Date(), fv, frequencyUnit);
-        await addRecord<Medication>(paths.medications(familyId, petId), {
+        const newId = await addRecord<Medication>(paths.medications(familyId, petId), {
           petId,
           familyId,
           name: nameInput.trim(),
@@ -192,10 +237,26 @@ export default function MedicationsScreen() {
           reminderTime: reminderEnabled ? reminderTimeToSave : undefined,
           reminderTimes: reminderEnabled ? reminderTimesToSave : undefined,
           reminderDays: reminderEnabled ? reminderDaysToSave : undefined,
-          nextDueDate: nextDue ? toTimestamp(nextDue) : undefined,
+          nextDueDate: nextDueTimestamp,
           isActive: true,
           createdBy: user!.uid,
         });
+        // Schedule local notification immediately for the new medication
+        if (reminderEnabled) {
+          scheduleOneMedicationReminder({
+            id: newId,
+            petId,
+            familyId,
+            name: nameInput.trim(),
+            dosage: dosageInput.trim(),
+            isActive: true,
+            reminderEnabled: true,
+            reminderTime: reminderTimeToSave,
+            reminderTimes: reminderTimesToSave,
+            frequencyUnit,
+            frequencyValue: fv,
+          } as Medication, petName).catch(() => {});
+        }
       }
       setDialogVisible(false);
       reset();
@@ -206,7 +267,6 @@ export default function MedicationsScreen() {
     }
   }
 
-  // Change 4: hard delete with confirmation
   function handleDelete(med: Medication) {
     Alert.alert(
       t('medications.deleteConfirm', { name: med.name }),
@@ -216,7 +276,11 @@ export default function MedicationsScreen() {
         {
           text: t('common.delete'),
           style: 'destructive',
-          onPress: () => deleteRecord(paths.medications(familyId, petId), med.id),
+          onPress: () => {
+            // Cancel local notification before removing from Firestore
+            cancelMedicationReminder(med.id).catch(() => {});
+            deleteRecord(paths.medications(familyId, petId), med.id);
+          },
         },
       ]
     );
@@ -228,26 +292,25 @@ export default function MedicationsScreen() {
     return t('medications.units_dose');
   }
 
-  // Change 5: smart reminder JSX helper
+  // Smart reminder JSX helper — all time fields use the native clock picker
   function renderReminderFields() {
     const fv = parseInt(frequencyValue, 10) || 1;
 
     if (frequencyUnit === 'daily' && fv > 1) {
+      // Multiple doses per day — one clock picker per dose
       return (
         <>
           {Array.from({ length: fv }, (_, i) => (
-            <TextInput
+            <DateTimeInput
               key={i}
               label={t('medications.reminderTimeN', { n: i + 1 })}
               value={reminderTimes[i] ?? '08:00'}
-              onChangeText={(v) => {
+              onChange={(v) => {
                 const updated = [...reminderTimes];
                 updated[i] = v;
                 setReminderTimes(updated);
               }}
-              mode="outlined"
-              style={styles.input}
-              placeholder="08:00"
+              mode="time"
             />
           ))}
         </>
@@ -282,13 +345,11 @@ export default function MedicationsScreen() {
               />
             ))}
           </Menu>
-          <TextInput
+          <DateTimeInput
             label={t('medications.reminderTimeLabel')}
             value={reminderTime}
-            onChangeText={setReminderTime}
-            mode="outlined"
-            style={styles.input}
-            placeholder="08:00"
+            onChange={setReminderTime}
+            mode="time"
           />
         </>
       );
@@ -306,26 +367,23 @@ export default function MedicationsScreen() {
             style={styles.input}
             placeholder="1"
           />
-          <TextInput
+          <DateTimeInput
             label={t('medications.reminderTimeLabel')}
             value={reminderTime}
-            onChangeText={setReminderTime}
-            mode="outlined"
-            style={styles.input}
-            placeholder="08:00"
+            onChange={setReminderTime}
+            mode="time"
           />
         </>
       );
     }
 
+    // Default: single daily reminder time
     return (
-      <TextInput
+      <DateTimeInput
         label={t('medications.reminderTimeLabel')}
         value={reminderTime}
-        onChangeText={setReminderTime}
-        mode="outlined"
-        style={styles.input}
-        placeholder="08:00"
+        onChange={setReminderTime}
+        mode="time"
       />
     );
   }

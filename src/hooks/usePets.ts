@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { subscribeToPets } from '../services/firebase/firestore';
 import { useAuthStore } from '../store/authStore';
 import { usePetsStore } from '../store/petsStore';
@@ -18,9 +19,15 @@ export function usePetsSubscription() {
   }, [familyId]);
 }
 
-/** Returns all active pets from the store */
+/** Returns all pets from the store (active + inactive/deceased).
+ *  Use useActivePets() when inactive pets must be excluded. */
 export function usePets() {
   return usePetsStore((s) => s.pets);
+}
+
+/** Returns only active pets (excludes deceased / soft-deleted). */
+export function useActivePets() {
+  return usePetsStore(useShallow((s) => s.pets.filter((p) => p.isActive !== false)));
 }
 
 /** Returns a single pet by id */

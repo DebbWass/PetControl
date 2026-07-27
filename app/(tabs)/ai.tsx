@@ -8,7 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import app from '../../src/services/firebase/config';
-import { usePets } from '../../src/hooks/usePets';
+import { useActivePets } from '../../src/hooks/usePets';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_MAP } from '../../src/constants/species';
@@ -40,7 +40,7 @@ const SUGGESTED_QUESTIONS_EN = [
 export default function AIAssistantScreen() {
   const { t, i18n } = useTranslation();
   const isHe = i18n.language === 'he';
-  const pets = usePets();
+  const pets = useActivePets();
   const user = useAuthStore((s) => s.user);
 
   const [messages, setMessages] = useState<Message[]>([]);

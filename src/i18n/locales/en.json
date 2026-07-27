@@ -62,7 +62,16 @@
     "save": "Save",
     "birthYear": "Birth Year",
     "changePhoto": "Change Photo",
-    "editPetTitle": "Edit Pet Profile"
+    "editPetTitle": "Edit Pet Profile",
+    "active": "Active",
+    "inactive": "Inactive",
+    "all": "All",
+    "deceased": "Deceased",
+    "markDeceased": "Mark as deceased",
+    "deathDate": "Date of passing",
+    "confirmDeceased": "Mark {{name}} as deceased? The pet will become inactive.",
+    "reactivate": "Restore to active",
+    "confirmReactivate": "Restore {{name}} to active?"
   },
   "weight": {
     "title": "Weight Tracking",
@@ -215,7 +224,12 @@
     "noReminders": "No upcoming reminders",
     "daysLeft": "{{count}} days",
     "tomorrow": "Tomorrow",
-    "todayLabel": "Today"
+    "todayLabel": "Today",
+    "todayAt": "Today at {{time}}",
+    "addReminder": "Add Reminder",
+    "selectPet": "Select a pet to add a reminder",
+    "addMedication": "Medication",
+    "addAppointment": "Appointment"
   },
   "dashboard": {
     "title": "Hello!",

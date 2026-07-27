@@ -3,14 +3,18 @@ import { useFocusEffect } from 'expo-router';
 import {
   collection, getDocs, query, where, orderBy, Timestamp,
 } from 'firebase/firestore';
-import { differenceInCalendarDays, startOfDay, endOfDay, addDays } from 'date-fns';
+import {
+  differenceInCalendarDays, startOfDay, endOfDay, addDays, setHours, setMinutes,
+} from 'date-fns';
 import { db } from '../services/firebase/config';
-import { paths } from '../services/firebase/firestore';
+import { paths, updateRecord } from '../services/firebase/firestore';
 import { useAuthStore } from '../store/authStore';
-import { usePets } from './usePets';
-import { Medication, Vaccine, Treatment, Appointment } from '../types';
+import { useActivePets } from './usePets';
+import { Medication, Vaccine, Treatment, Appointment, FrequencyUnit } from '../types';
+import { calcMedicationNextDue } from '../utils/medicationUtils';
 
 export interface DashboardTask {
+  recordId: string;
   petId: string;
   petName: string;
   type: 'medication' | 'vaccine' | 'treatment' | 'appointment';
@@ -18,6 +22,11 @@ export interface DashboardTask {
   scheduledDate: Date;
   daysUntil: number;
   route: string;
+  /** HH:MM display string — present when a specific time is known */
+  timeLabel?: string;
+  /** Frequency fields — present on medication tasks, used for mark-done advancement */
+  frequencyValue?: number;
+  frequencyUnit?: FrequencyUnit;
 }
 
 export interface DashboardData {
@@ -25,29 +34,98 @@ export interface DashboardData {
   upcoming7: DashboardTask[];
   overdue: DashboardTask[];
   isLoading: boolean;
+  refresh: () => void;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Advance an overdue recurring medication date forward by its frequency
+ * until it reaches today or the future.  This ensures a daily medication
+ * saved weeks ago shows as "today" instead of staying stuck in overdue.
+ */
+function advanceToCurrentDue(
+  dueDate: Date,
+  fv: number,
+  fu: FrequencyUnit,
+  reminderTime?: string,
+): Date {
+  if (fu === 'as_needed') return dueDate;
+  const todayStart = startOfDay(new Date());
+  if (dueDate >= todayStart) return dueDate; // already today or future
+
+  let d = dueDate;
+  let safety = 500; // cap iterations
+  while (d < todayStart && safety-- > 0) {
+    const next = calcMedicationNextDue(d, fv, fu);
+    if (!next) break;
+    d = next;
+  }
+
+  // Re-apply the reminder time component to whichever calendar day we landed on
+  if (reminderTime) {
+    const parts = reminderTime.split(':').map(Number);
+    const hour = isNaN(parts[0]) ? 8 : parts[0];
+    const minute = isNaN(parts[1]) ? 0 : parts[1];
+    d = setHours(setMinutes(d, minute), hour);
+  }
+  return d;
+}
+
+// ─── Public action ────────────────────────────────────────────────────────────
+
+/**
+ * Mark a medication task as given.
+ * Calculates the next due date (one frequency interval from now, preserving
+ * the original reminder time) and writes it back to Firestore.
+ */
+export async function markMedicationDone(
+  familyId: string,
+  task: DashboardTask,
+): Promise<void> {
+  if (task.type !== 'medication' || !task.frequencyValue || !task.frequencyUnit) return;
+  const now = new Date();
+  const base = calcMedicationNextDue(now, task.frequencyValue, task.frequencyUnit);
+  if (!base) return; // as_needed — nothing to advance
+
+  let nextDate = base;
+  if (task.timeLabel) {
+    const parts = task.timeLabel.split(':').map(Number);
+    const hour = isNaN(parts[0]) ? 8 : parts[0];
+    const minute = isNaN(parts[1]) ? 0 : parts[1];
+    nextDate = setHours(setMinutes(base, minute), hour);
+  }
+
+  await updateRecord<Medication>(
+    paths.medications(familyId, task.petId),
+    task.recordId,
+    { nextDueDate: Timestamp.fromDate(nextDate) },
+  );
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 export function useDashboard(): DashboardData {
-  const [data, setData] = useState<DashboardData>({
+  const [state, setState] = useState<Omit<DashboardData, 'refresh'>>({
     today: [],
     upcoming7: [],
     overdue: [],
     isLoading: true,
   });
   const user = useAuthStore((s) => s.user);
-  const pets = usePets();
+  const pets = useActivePets();
 
   const fetchDashboard = useCallback(async () => {
     if (!user?.familyId) {
-      setData((d) => ({ ...d, isLoading: false }));
+      setState((d) => ({ ...d, isLoading: false }));
       return;
     }
     if (pets.length === 0) {
-      setData({ today: [], upcoming7: [], overdue: [], isLoading: false });
+      setState({ today: [], upcoming7: [], overdue: [], isLoading: false });
       return;
     }
 
-    setData((d) => ({ ...d, isLoading: true }));
+    setState((d) => ({ ...d, isLoading: true }));
     const familyId = user.familyId;
     const now = new Date();
     const todayStart = startOfDay(now);
@@ -60,29 +138,43 @@ export function useDashboard(): DashboardData {
         const petId = pet.id;
         const route = (sub: string) => `/pet/${petId}/${sub}`;
 
-        // ── Medications with nextDueDate within 7 days ──────────────
+        // ── Medications: overdue + today + upcoming 7 days ──────────
+        // Query only by isActive (single-field index, always available).
+        // Date filtering and overdue-advancement are done client-side.
         try {
           const medsSnap = await getDocs(
             query(
               collection(db, paths.medications(familyId, petId)),
               where('isActive', '==', true),
-              where('nextDueDate', '>=', Timestamp.fromDate(todayStart)),
-              where('nextDueDate', '<=', Timestamp.fromDate(sevenDaysEnd)),
-              orderBy('nextDueDate', 'asc')
             )
           );
           medsSnap.docs.forEach((d) => {
-            const m = d.data() as Medication;
-            const dueDate = m.nextDueDate?.toDate();
-            if (!dueDate) return;
-            const days = differenceInCalendarDays(dueDate, now);
+            const m = { id: d.id, ...d.data() } as Medication;
+            const rawDue = m.nextDueDate?.toDate();
+            if (!rawDue) return;
+
+            // Advance overdue recurring medications to the current cycle date
+            const effectiveDue = advanceToCurrentDue(
+              rawDue,
+              m.frequencyValue,
+              m.frequencyUnit,
+              m.reminderTime,
+            );
+
+            if (effectiveDue > sevenDaysEnd) return; // too far ahead — skip
+
+            const days = differenceInCalendarDays(effectiveDue, now);
             allTasks.push({
+              recordId: d.id,
               petId, petName: pet.name, type: 'medication',
-              label: m.name, scheduledDate: dueDate, daysUntil: days,
+              label: m.name, scheduledDate: effectiveDue, daysUntil: days,
               route: route('medications'),
+              timeLabel: m.reminderTime,
+              frequencyValue: m.frequencyValue,
+              frequencyUnit: m.frequencyUnit,
             });
           });
-        } catch { /* index may not exist yet during development */ }
+        } catch { /* skip */ }
 
         // ── Vaccines due soon (within 7 days or overdue) ────────────
         try {
@@ -90,7 +182,7 @@ export function useDashboard(): DashboardData {
             query(
               collection(db, paths.vaccines(familyId, petId)),
               where('nextDueDate', '<=', Timestamp.fromDate(sevenDaysEnd)),
-              orderBy('nextDueDate', 'asc')
+              orderBy('nextDueDate', 'asc'),
             )
           );
           vaccSnap.docs.forEach((d) => {
@@ -99,6 +191,7 @@ export function useDashboard(): DashboardData {
             if (!dueDate) return;
             const days = differenceInCalendarDays(dueDate, now);
             allTasks.push({
+              recordId: d.id,
               petId, petName: pet.name, type: 'vaccine',
               label: v.name, scheduledDate: dueDate, daysUntil: days,
               route: route('vaccines'),
@@ -112,7 +205,7 @@ export function useDashboard(): DashboardData {
             query(
               collection(db, paths.treatments(familyId, petId)),
               where('nextDueDate', '<=', Timestamp.fromDate(sevenDaysEnd)),
-              orderBy('nextDueDate', 'asc')
+              orderBy('nextDueDate', 'asc'),
             )
           );
           treatSnap.docs.forEach((d) => {
@@ -121,6 +214,7 @@ export function useDashboard(): DashboardData {
             if (!dueDate) return;
             const days = differenceInCalendarDays(dueDate, now);
             allTasks.push({
+              recordId: d.id,
               petId, petName: pet.name, type: 'treatment',
               label: tr.productName, scheduledDate: dueDate, daysUntil: days,
               route: route('treatments'),
@@ -129,25 +223,30 @@ export function useDashboard(): DashboardData {
         } catch { /* skip */ }
 
         // ── Appointments today through 7 days ───────────────────────
+        // Range on scheduledDate only — status filtered client-side.
         try {
           const aptSnap = await getDocs(
             query(
               collection(db, paths.appointments(familyId, petId)),
-              where('status', '==', 'scheduled'),
               where('scheduledDate', '>=', Timestamp.fromDate(todayStart)),
               where('scheduledDate', '<=', Timestamp.fromDate(sevenDaysEnd)),
-              orderBy('scheduledDate', 'asc')
+              orderBy('scheduledDate', 'asc'),
             )
           );
           aptSnap.docs.forEach((d) => {
             const a = d.data() as Appointment;
+            if (a.status !== 'scheduled') return; // client-side filter
             const aptDate = a.scheduledDate?.toDate();
             if (!aptDate) return;
             const days = differenceInCalendarDays(aptDate, now);
+            const hh = aptDate.getHours().toString().padStart(2, '0');
+            const mm = aptDate.getMinutes().toString().padStart(2, '0');
             allTasks.push({
+              recordId: d.id,
               petId, petName: pet.name, type: 'appointment',
               label: a.title, scheduledDate: aptDate, daysUntil: days,
               route: route('appointments'),
+              timeLabel: `${hh}:${mm}`,
             });
           });
         } catch { /* skip */ }
@@ -156,7 +255,7 @@ export function useDashboard(): DashboardData {
 
     allTasks.sort((a, b) => a.scheduledDate.getTime() - b.scheduledDate.getTime());
 
-    setData({
+    setState({
       today: allTasks.filter((t) => t.daysUntil === 0),
       upcoming7: allTasks.filter((t) => t.daysUntil > 0 && t.daysUntil <= 7),
       overdue: allTasks.filter((t) => t.daysUntil < 0),
@@ -167,5 +266,5 @@ export function useDashboard(): DashboardData {
   // Refresh whenever the tab comes into focus
   useFocusEffect(useCallback(() => { fetchDashboard(); }, [fetchDashboard]));
 
-  return data;
+  return { ...state, refresh: fetchDashboard };
 }

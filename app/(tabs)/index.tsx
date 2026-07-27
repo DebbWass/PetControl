@@ -1,10 +1,10 @@
 import { ScrollView, StyleSheet, View, Image, TouchableOpacity } from 'react-native';
-import { Text, Card, ActivityIndicator, List } from 'react-native-paper';
+import { Text, Card, ActivityIndicator, List, IconButton } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { usePets } from '../../src/hooks/usePets';
+import { useActivePets } from '../../src/hooks/usePets';
 import { useAuthStore } from '../../src/store/authStore';
-import { useDashboard, DashboardTask } from '../../src/hooks/useDashboard';
+import { useDashboard, DashboardTask, markMedicationDone } from '../../src/hooks/useDashboard';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_MAP } from '../../src/constants/species';
 
@@ -21,17 +21,26 @@ function taskTypeIcon(type: DashboardTask['type']): string {
 export default function HomeScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
-  const pets = usePets();
-  const { today, upcoming7, overdue, isLoading } = useDashboard();
+  const pets = useActivePets();
+  const { today, upcoming7, overdue, isLoading, refresh } = useDashboard();
 
   function renderTask(task: DashboardTask) {
     const key = `${task.petId}-${task.type}-${task.scheduledDate.getTime()}`;
-    const desc =
-      task.daysUntil === 0
-        ? t('reminders.todayLabel')
-        : task.daysUntil < 0
-        ? t('reminders.overdue')
+
+    let desc: string;
+    if (task.daysUntil === 0) {
+      desc = task.timeLabel
+        ? t('reminders.todayAt', { time: task.timeLabel })
+        : t('reminders.todayLabel');
+    } else if (task.daysUntil < 0) {
+      desc = task.timeLabel
+        ? `${t('reminders.overdue')} • ${task.timeLabel}`
+        : t('reminders.overdue');
+    } else {
+      desc = task.timeLabel
+        ? `${t('reminders.daysLeft', { count: task.daysUntil })} • ${task.timeLabel}`
         : t('reminders.daysLeft', { count: task.daysUntil });
+    }
 
     return (
       <List.Item
@@ -39,7 +48,23 @@ export default function HomeScreen() {
         title={`${taskTypeIcon(task.type)} ${task.petName} – ${task.label}`}
         description={desc}
         onPress={() => router.push(task.route as any)}
-        right={(props) => <List.Icon {...props} icon="chevron-right" />}
+        right={(props) => (
+          <View style={styles.taskRight}>
+            {task.type === 'medication' && (
+              <IconButton
+                icon="check-circle-outline"
+                iconColor="#4CAF50"
+                size={22}
+                onPress={async () => {
+                  if (!user?.familyId) return;
+                  await markMedicationDone(user.familyId, task).catch(() => {});
+                  refresh();
+                }}
+              />
+            )}
+            <List.Icon {...props} icon="chevron-right" />
+          </View>
+        )}
         titleStyle={styles.taskTitle}
       />
     );
@@ -128,10 +153,11 @@ const styles = StyleSheet.create({
   sectionTitle: { marginBottom: 8, marginTop: 4 },
   muted: { color: Colors.textSecondary, marginTop: 4, marginBottom: 8 },
   taskTitle: { fontSize: 14 },
+  taskRight: { flexDirection: 'row', alignItems: 'center' },
   petGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 4 },
   petItem: { width: '33.33%', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
   petCircle: { width: 70, height: 70, borderRadius: 35 },
   petCircleFallback: { backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' },
   petEmoji: { fontSize: 32 },
-  petName: { fontSize: 12, marginTop: 6, textAlign: 'center', color: Colors.text },
+  petName: { fontSize: 12, marginTop: 6, textAlign: 'center', color: Colors.textPrimary },
 });

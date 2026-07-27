@@ -47,7 +47,7 @@ export default function RegisterScreen() {
           ? await registerAndCreateFamily(email.trim(), password, displayName.trim(), familyName.trim())
           : await registerAndJoinFamily(email.trim(), password, displayName.trim(), inviteCode.trim());
       setUser(user);
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     } catch (e: any) {
       if (e.message === 'INVALID_INVITE_CODE') {
         setError(t('family.invalidCode'));

@@ -11,7 +11,13 @@ import {
   registerForPushNotifications,
   saveTokenToFirestore,
   setupNotificationChannels,
+  scheduleLocalMedicationReminders,
 } from '../src/services/notifications';
+import { getDocs, collection, query, where } from 'firebase/firestore';
+import { db } from '../src/services/firebase/config';
+import { paths } from '../src/services/firebase/firestore';
+import { useActivePets } from '../src/hooks/usePets';
+import { Medication } from '../src/types';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, StyleSheet } from 'react-native';
 
@@ -58,7 +64,7 @@ function AuthListener() {
           const family = await loadFamily(appUser.familyId);
           setFamily(family);
           setLoading(false);
-          router.replace('/(tabs)/');
+          router.replace('/(tabs)');
         } catch {
           clear();
           router.replace('/auth/login');
@@ -81,6 +87,7 @@ function PetsLoader() {
 
 function NotificationBootstrapper() {
   const user = useAuthStore((s) => s.user);
+  const pets = useActivePets();
 
   useEffect(() => {
     setupNotificationChannels();
@@ -106,6 +113,35 @@ function NotificationBootstrapper() {
 
     return () => sub.remove();
   }, [user?.uid]);
+
+  // At boot (and whenever the pet list changes): fetch ALL active medications
+  // for ALL pets and ensure their local daily notifications are scheduled.
+  useEffect(() => {
+    if (!user?.familyId || pets.length === 0) return;
+    const familyId = user.familyId;
+
+    async function scheduleAll() {
+      const allMeds: Medication[] = [];
+      // Build petId → petName map for notification titles
+      const petsMap: Record<string, string> = {};
+      for (const pet of pets) {
+        petsMap[pet.id] = pet.name;
+        try {
+          const snap = await getDocs(
+            query(
+              collection(db, paths.medications(familyId, pet.id)),
+              where('isActive', '==', true),
+              where('reminderEnabled', '==', true)
+            )
+          );
+          snap.docs.forEach((d) => allMeds.push({ id: d.id, ...d.data() } as Medication));
+        } catch { /* skip this pet on error */ }
+      }
+      await scheduleLocalMedicationReminders(allMeds, petsMap);
+    }
+
+    scheduleAll().catch(() => {});
+  }, [user?.familyId, pets.length]);
 
   return null;
 }
