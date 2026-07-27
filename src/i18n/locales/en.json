@@ -62,7 +62,16 @@
     "save": "Save",
     "birthYear": "Birth Year",
     "changePhoto": "Change Photo",
-    "editPetTitle": "Edit Pet Profile"
+    "editPetTitle": "Edit Pet Profile",
+    "active": "Active",
+    "inactive": "Inactive",
+    "all": "All",
+    "deceased": "Deceased",
+    "markDeceased": "Mark as deceased",
+    "deathDate": "Date of passing",
+    "confirmDeceased": "Mark {{name}} as deceased? The pet will become inactive.",
+    "reactivate": "Restore to active",
+    "confirmReactivate": "Restore {{name}} to active?"
   },
   "weight": {
     "title": "Weight Tracking",

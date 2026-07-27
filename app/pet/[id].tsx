@@ -8,13 +8,15 @@ import { useLocalSearchParams, router, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import * as ImagePicker from 'expo-image-picker';
 import { Timestamp } from 'firebase/firestore';
+import { format, parse, isValid } from 'date-fns';
 import { usePet } from '../../src/hooks/usePets';
-import { softDeletePet, updatePet } from '../../src/services/firebase/firestore';
+import { softDeletePet, updatePet, markPetDeceased, reactivatePet } from '../../src/services/firebase/firestore';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_LIST, SPECIES_MAP } from '../../src/constants/species';
 import { Species, Sex, Pet } from '../../src/types';
-import { formatAge } from '../../src/utils/dateUtils';
+import { formatAge, formatDate, toTimestamp } from '../../src/utils/dateUtils';
+import { DateTimeInput } from '../../src/components/DateTimeInput';
 import { uploadPetPhoto } from '../../src/services/storage';
 
 export default function PetDetailScreen() {
@@ -38,6 +40,12 @@ export default function PetDetailScreen() {
   const [editError, setEditError] = useState('');
   const [speciesMenuVisible, setSpeciesMenuVisible] = useState(false);
 
+  // Deceased dialog state
+  const [deceasedVisible, setDeceasedVisible] = useState(false);
+  const [deathDateInput, setDeathDateInput] = useState('');
+  const [deceasedLoading, setDeceasedLoading] = useState(false);
+  const [deceasedError, setDeceasedError] = useState('');
+
   if (!pet) {
     return (
       <View style={styles.center}>
@@ -48,6 +56,7 @@ export default function PetDetailScreen() {
 
   const speciesInfo = SPECIES_MAP[pet.species];
   const selectedEditSpecies = SPECIES_LIST.find((s) => s.key === editSpecies);
+  const isInactive = pet.isActive === false;
 
   function openEdit() {
     setEditName(pet!.name);
@@ -138,6 +147,47 @@ export default function PetDetailScreen() {
     );
   }
 
+  function openDeceased() {
+    setDeathDateInput(format(new Date(), 'dd/MM/yyyy'));
+    setDeceasedError('');
+    setDeceasedVisible(true);
+  }
+
+  async function handleDeceasedSave() {
+    const parsed = parse(deathDateInput.trim(), 'dd/MM/yyyy', new Date());
+    if (!deathDateInput.trim() || !isValid(parsed)) {
+      setDeceasedError(t('common.required'));
+      return;
+    }
+    setDeceasedLoading(true);
+    setDeceasedError('');
+    try {
+      await markPetDeceased(user!.familyId, id, toTimestamp(parsed));
+      setDeceasedVisible(false);
+      router.back();
+    } catch (e: any) {
+      setDeceasedError(e.message ?? t('common.error'));
+    } finally {
+      setDeceasedLoading(false);
+    }
+  }
+
+  function confirmReactivate() {
+    Alert.alert(
+      t('pets.reactivate'),
+      t('pets.confirmReactivate', { name: pet!.name }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('pets.reactivate'),
+          onPress: async () => {
+            await reactivatePet(user!.familyId, id);
+          },
+        },
+      ]
+    );
+  }
+
   const sections = [
     { icon: 'scale', label: t('weight.title'), route: `/pet/${id}/weight` },
     { icon: 'pill', label: t('medications.title'), route: `/pet/${id}/medications` },
@@ -156,7 +206,14 @@ export default function PetDetailScreen() {
           headerRight: () => (
             <View style={styles.headerButtons}>
               <IconButton icon="pencil" iconColor={Colors.primary} onPress={openEdit} />
-              <IconButton icon="delete" iconColor={Colors.danger} onPress={confirmDelete} />
+              {isInactive ? (
+                <IconButton icon="restore" iconColor={Colors.primary} onPress={confirmReactivate} />
+              ) : (
+                <>
+                  <IconButton icon="heart-broken" iconColor={Colors.textSecondary} onPress={openDeceased} />
+                  <IconButton icon="delete" iconColor={Colors.danger} onPress={confirmDelete} />
+                </>
+              )}
             </View>
           ),
         }}
@@ -190,6 +247,17 @@ export default function PetDetailScreen() {
                 <Chip compact style={styles.chip}>{t('pets.isNeutered')}</Chip>
               )}
             </View>
+            {isInactive && (
+              <Chip
+                compact
+                icon={pet.deceased ? 'heart-broken' : undefined}
+                style={styles.statusChip}
+              >
+                {pet.deceased
+                  ? `${t('pets.deceased')}${pet.deathDate ? ` · ${formatDate(pet.deathDate)}` : ''}`
+                  : t('pets.inactive')}
+              </Chip>
+            )}
           </Card.Content>
         </Card>
 
@@ -330,6 +398,31 @@ export default function PetDetailScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {/* Mark as deceased Dialog */}
+      <Portal>
+        <Dialog visible={deceasedVisible} onDismiss={() => setDeceasedVisible(false)}>
+          <Dialog.Title>{t('pets.markDeceased')}</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium" style={styles.deceasedText}>
+              {t('pets.confirmDeceased', { name: pet.name })}
+            </Text>
+            <DateTimeInput
+              label={t('pets.deathDate')}
+              value={deathDateInput}
+              onChange={setDeathDateInput}
+              mode="date"
+            />
+            {deceasedError ? <HelperText type="error">{deceasedError}</HelperText> : null}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDeceasedVisible(false)}>{t('common.cancel')}</Button>
+            <Button onPress={handleDeceasedSave} loading={deceasedLoading} textColor={Colors.danger}>
+              {t('common.save')}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </>
   );
 }
@@ -346,6 +439,8 @@ const styles = StyleSheet.create({
   speciesText: { color: Colors.textSecondary, marginTop: 2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 6 },
   chip: { backgroundColor: Colors.primaryLight },
+  statusChip: { marginTop: 10, backgroundColor: Colors.border },
+  deceasedText: { marginBottom: 12, color: Colors.textSecondary },
   sectionCard: { marginBottom: 8 },
   editDialog: { maxHeight: '90%' },
   scrollArea: { maxHeight: 480 },

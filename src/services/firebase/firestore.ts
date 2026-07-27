@@ -16,6 +16,7 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  deleteField,
   Timestamp,
   QueryConstraint,
   DocumentData,
@@ -64,17 +65,42 @@ export async function softDeletePet(familyId: string, petId: string): Promise<vo
   });
 }
 
-/** One-shot fetch of all active pets – used as a fallback / focus refresh.
- *  Filters client-side so pets missing the isActive field are still shown. */
+/** Mark a pet as deceased with a date of passing. Also makes it inactive. */
+export async function markPetDeceased(
+  familyId: string,
+  petId: string,
+  deathDate: Timestamp
+): Promise<void> {
+  await updateDoc(doc(db, paths.pets(familyId), petId), {
+    deceased: true,
+    deathDate,
+    isActive: false,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Restore an inactive/deceased pet to active. Clears any death metadata. */
+export async function reactivatePet(familyId: string, petId: string): Promise<void> {
+  await updateDoc(doc(db, paths.pets(familyId), petId), {
+    isActive: true,
+    deceased: false,
+    deathDate: deleteField(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/** Sort pets by name client-side. A missing/null name sorts last instead of
+ *  being dropped (Firestore orderBy('name') silently omits such documents). */
+function sortPetsByName(pets: Pet[]): Pet[] {
+  return [...pets].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+}
+
+/** One-shot fetch of ALL pets (active + inactive) – used as a fallback / focus
+ *  refresh. Active/inactive filtering is done in the UI layer. No orderBy is
+ *  used so pets missing a name field are still returned. */
 export async function getPets(familyId: string): Promise<Pet[]> {
-  const q = query(
-    collection(db, paths.pets(familyId)),
-    orderBy('name')
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => ({ id: d.id, ...d.data() } as Pet))
-    .filter((p) => p.isActive !== false);
+  const snap = await getDocs(collection(db, paths.pets(familyId)));
+  return sortPetsByName(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Pet)));
 }
 
 export function subscribeToPets(
@@ -82,16 +108,10 @@ export function subscribeToPets(
   onUpdate: (pets: Pet[]) => void,
   onError?: (err: Error) => void
 ) {
-  const q = query(
-    collection(db, paths.pets(familyId)),
-    orderBy('name')
-  );
   return onSnapshot(
-    q,
+    collection(db, paths.pets(familyId)),
     (snap) => onUpdate(
-      snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as Pet))
-        .filter((p) => p.isActive !== false)
+      sortPetsByName(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Pet)))
     ),
     (err) => {
       console.error('[subscribeToPets]', err);

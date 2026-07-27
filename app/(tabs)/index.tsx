@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, View, Image, TouchableOpacity } from 'react-nat
 import { Text, Card, ActivityIndicator, List, IconButton } from 'react-native-paper';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { usePets } from '../../src/hooks/usePets';
+import { useActivePets } from '../../src/hooks/usePets';
 import { useAuthStore } from '../../src/store/authStore';
 import { useDashboard, DashboardTask, markMedicationDone } from '../../src/hooks/useDashboard';
 import { Colors } from '../../src/constants/colors';
@@ -21,7 +21,7 @@ function taskTypeIcon(type: DashboardTask['type']): string {
 export default function HomeScreen() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
-  const pets = usePets();
+  const pets = useActivePets();
   const { today, upcoming7, overdue, isLoading, refresh } = useDashboard();
 
   function renderTask(task: DashboardTask) {

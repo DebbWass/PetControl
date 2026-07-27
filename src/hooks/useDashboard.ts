@@ -9,7 +9,7 @@ import {
 import { db } from '../services/firebase/config';
 import { paths, updateRecord } from '../services/firebase/firestore';
 import { useAuthStore } from '../store/authStore';
-import { usePets } from './usePets';
+import { useActivePets } from './usePets';
 import { Medication, Vaccine, Treatment, Appointment, FrequencyUnit } from '../types';
 import { calcMedicationNextDue } from '../utils/medicationUtils';
 
@@ -113,7 +113,7 @@ export function useDashboard(): DashboardData {
     isLoading: true,
   });
   const user = useAuthStore((s) => s.user);
-  const pets = usePets();
+  const pets = useActivePets();
 
   const fetchDashboard = useCallback(async () => {
     if (!user?.familyId) {

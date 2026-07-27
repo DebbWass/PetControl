@@ -80,6 +80,8 @@ export interface Pet {
   color?: string;
   microchipNumber?: string;
   isActive: boolean;
+  deceased?: boolean;
+  deathDate?: Timestamp;
   createdBy: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;

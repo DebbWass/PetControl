@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import { he as heLocale, enUS } from 'date-fns/locale';
 import { useDashboard, DashboardTask, markMedicationDone } from '../../src/hooks/useDashboard';
-import { usePets } from '../../src/hooks/usePets';
+import { useActivePets } from '../../src/hooks/usePets';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_MAP } from '../../src/constants/species';
@@ -27,7 +27,7 @@ export default function RemindersScreen() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language === 'he' ? heLocale : enUS;
   const { today, upcoming7, overdue, isLoading, refresh } = useDashboard();
-  const pets = usePets();
+  const pets = useActivePets();
   const user = useAuthStore((s) => s.user);
 
   const [addDialogVisible, setAddDialogVisible] = useState(false);

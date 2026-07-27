@@ -62,7 +62,16 @@
     "save": "שמור",
     "birthYear": "שנת לידה",
     "changePhoto": "שנה תמונה",
-    "editPetTitle": "עריכת פרטי חיה"
+    "editPetTitle": "עריכת פרטי חיה",
+    "active": "פעיל",
+    "inactive": "לא פעיל",
+    "all": "הכל",
+    "deceased": "נפטר/ה",
+    "markDeceased": "סימון כנפטר/ה",
+    "deathDate": "תאריך פטירה",
+    "confirmDeceased": "לסמן את {{name}} כנפטר/ה? החיה תעבור למצב לא פעיל.",
+    "reactivate": "החזר לפעילות",
+    "confirmReactivate": "להחזיר את {{name}} למצב פעיל?"
   },
   "weight": {
     "title": "מעקב משקל",

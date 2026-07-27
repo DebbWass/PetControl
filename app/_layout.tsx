@@ -16,7 +16,7 @@ import {
 import { getDocs, collection, query, where } from 'firebase/firestore';
 import { db } from '../src/services/firebase/config';
 import { paths } from '../src/services/firebase/firestore';
-import { usePets } from '../src/hooks/usePets';
+import { useActivePets } from '../src/hooks/usePets';
 import { Medication } from '../src/types';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, StyleSheet } from 'react-native';
@@ -87,7 +87,7 @@ function PetsLoader() {
 
 function NotificationBootstrapper() {
   const user = useAuthStore((s) => s.user);
-  const pets = usePets();
+  const pets = useActivePets();
 
   useEffect(() => {
     setupNotificationChannels();
