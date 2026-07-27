@@ -259,7 +259,15 @@
     "version": "Version",
     "restartRequired": "Restart Required",
     "restartMessage": "Language change takes effect after restarting the app.",
-    "restart": "Restart Now"
+    "restart": "Restart Now",
+    "account": "Account",
+    "deleteAccount": "Delete account",
+    "deleteAccountWarnMember": "Deleting your account will remove you from the family. Shared data (pets, records) stays available to the other family members. This cannot be undone.",
+    "deleteAccountWarnOwnerLast": "You are the last member of the family. Deleting your account will permanently delete all pets, health records, documents and photos. This cannot be recovered. Continue?",
+    "deleteAccountFinalTitle": "Final confirmation",
+    "deleteAccountFinalBody": "This action is permanent and irreversible. Delete your account?",
+    "deleteAccountConfirmButton": "Delete permanently",
+    "deleteAccountError": "Account deletion failed. Please try again later."
   },
   "ai": {
     "title": "AI Assistant",

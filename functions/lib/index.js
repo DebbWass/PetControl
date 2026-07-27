@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendDailyReminders = exports.askPetAI = void 0;
+exports.sendDailyReminders = exports.deleteAccount = exports.askPetAI = void 0;
 const admin = require("firebase-admin");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const https_1 = require("firebase-functions/v2/https");
@@ -48,6 +48,65 @@ If pet information is provided, take it into account.`;
     });
     const text = response.content[0].type === 'text' ? response.content[0].text : '';
     return { response: text };
+});
+// ─── Account deletion (GDPR / Google Play compliance) ─────────────────────────
+// Runs with Admin privileges so it can recursively delete sub-collections and
+// remove the Firebase Auth user without requiring a recent re-login.
+//
+// Behaviour depends on family membership:
+//  • Last remaining member  → the whole family (pets, records, documents,
+//    Storage files) is permanently deleted.
+//  • Other members remain   → the user simply leaves the family; shared data is
+//    kept for the others. Ownership is handed to another member if needed.
+exports.deleteAccount = (0, https_1.onCall)({ region: 'europe-west1' }, async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Must be authenticated');
+    }
+    const uid = request.auth.uid;
+    const userIndexRef = db.doc(`users/${uid}`);
+    const userIndexSnap = await userIndexRef.get();
+    if (userIndexSnap.exists) {
+        const { familyId } = (userIndexSnap.data() ?? {});
+        if (familyId) {
+            const familyRef = db.doc(`families/${familyId}`);
+            const familySnap = await familyRef.get();
+            if (familySnap.exists) {
+                const family = (familySnap.data() ?? {});
+                const memberUids = family.memberUids ?? [];
+                const otherMembers = memberUids.filter((m) => m !== uid);
+                if (otherMembers.length === 0) {
+                    // Last member — permanently delete the whole family tree.
+                    await db.recursiveDelete(familyRef);
+                    // Remove associated Storage files (pet photos, medical documents).
+                    // Target the bucket explicitly — this project uses the newer
+                    // *.firebasestorage.app naming, not the default *.appspot.com.
+                    await admin
+                        .storage()
+                        .bucket('petcontrol-ac39f.firebasestorage.app')
+                        .deleteFiles({ prefix: `families/${familyId}/` })
+                        .catch((e) => {
+                        console.error(`Storage cleanup failed for family ${familyId}:`, e);
+                    });
+                }
+                else {
+                    // Other members remain — remove this user from the family only.
+                    const updates = {
+                        memberUids: firestore_1.FieldValue.arrayRemove(uid),
+                    };
+                    // Hand ownership to another member if this user was the owner.
+                    if (family.ownerUid === uid) {
+                        updates.ownerUid = otherMembers[0];
+                    }
+                    await familyRef.update(updates);
+                    await db.doc(`families/${familyId}/members/${uid}`).delete().catch(() => { });
+                }
+            }
+        }
+        await userIndexRef.delete().catch(() => { });
+    }
+    // Delete the Firebase Auth account last, once data cleanup has succeeded.
+    await admin.auth().deleteUser(uid);
+    return { success: true };
 });
 // ─── Scheduled daily reminders ────────────────────────────────────────────────
 // Runs at 08:00 Israel time (06:00 UTC) every day.

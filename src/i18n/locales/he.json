@@ -264,7 +264,15 @@
     "medications_notif": "תרופות",
     "vaccines_notif": "חיסונים",
     "treatments_notif": "טיפולים",
-    "appointments_notif": "תורים"
+    "appointments_notif": "תורים",
+    "account": "חשבון",
+    "deleteAccount": "מחיקת חשבון",
+    "deleteAccountWarnMember": "מחיקת החשבון תוציא אותך מהמשפחה. הנתונים המשותפים (חיות, רשומות) יישארו זמינים לשאר בני המשפחה. פעולה זו אינה הפיכה.",
+    "deleteAccountWarnOwnerLast": "את/ה החבר/ה האחרון/ה במשפחה. מחיקת החשבון תמחק לצמיתות את כל החיות, הרשומות הרפואיות, המסמכים והתמונות. לא ניתן לשחזר. להמשיך?",
+    "deleteAccountFinalTitle": "אישור אחרון",
+    "deleteAccountFinalBody": "הפעולה סופית ובלתי הפיכה. למחוק את החשבון?",
+    "deleteAccountConfirmButton": "מחק לצמיתות",
+    "deleteAccountError": "מחיקת החשבון נכשלה. נסו שוב מאוחר יותר."
   },
   "ai": {
     "title": "עוזר AI",

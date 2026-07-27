@@ -20,7 +20,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-import { auth, db } from './config';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { auth, db } from './config';
 import { AppUser, Family, NotificationPrefs } from '../../types';
 
 const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -166,6 +167,16 @@ export async function loadFamily(familyId: string): Promise<Family | null> {
 
 export function logout() {
   return signOut(auth);
+}
+
+/** Permanently delete the current user's account via the server-side function.
+ *  If the user is the last member of their family, all family data is deleted
+ *  too. On success the local session is signed out. */
+export async function deleteAccount(): Promise<void> {
+  const functions = getFunctions(app, 'europe-west1');
+  const fn = httpsCallable<void, { success: boolean }>(functions, 'deleteAccount');
+  await fn();
+  await signOut(auth).catch(() => {});
 }
 
 export function onAuthChange(callback: (user: User | null) => void) {

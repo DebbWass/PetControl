@@ -62,7 +62,10 @@ src/
     dateUtils.ts            # date-fns helpers
     medicationUtils.ts      # calcMedicationNextDue, calcVaccineNextDue
 
-functions/src/index.ts      # Cloud Function: sendDailyReminders (07:00 daily)
+functions/src/index.ts      # Cloud Functions (Gen 2, europe-west1):
+                            #   sendDailyReminders — FCM daily digest (08:00 Asia/Jerusalem)
+                            #   askPetAI          — Claude API proxy for the AI assistant tab
+                            #   deleteAccount     — GDPR/Play account + data deletion
 
 firestore.rules             # Security rules – family-scoped, isFamilyMember()
 firestore.indexes.json      # Composite indexes
@@ -113,7 +116,7 @@ families/{familyId}
 users/{userId}              # Top-level index: uid → familyId (login lookup)
 ```
 
-**Security rules** (`firestore.rules`): `isFamilyMember(familyId)` checks `request.auth.uid in families/{familyId}.memberUids`. Families are never deleted.
+**Security rules** (`firestore.rules`): `isFamilyMember(familyId)` checks `request.auth.uid in families/{familyId}.memberUids`. Clients can never delete a family (`allow delete: if false`). The **only** path that deletes a family is the `deleteAccount` Cloud Function (Admin SDK, bypasses rules) when the last member deletes their account — required for GDPR / Google Play account-deletion compliance.
 
 ---
 

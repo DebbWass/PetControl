@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import * as Updates from 'expo-updates';
 import { setLanguage } from '../../src/i18n';
-import { logout } from '../../src/services/firebase/auth';
+import { logout, deleteAccount } from '../../src/services/firebase/auth';
 import { useAuthStore } from '../../src/store/authStore';
 import { updateRecord } from '../../src/services/firebase/firestore';
 import { paths } from '../../src/services/firebase/firestore';
@@ -28,6 +28,50 @@ export default function SettingsScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(
     user?.notificationPrefs ?? DEFAULT_PREFS
   );
+  const [deleting, setDeleting] = useState(false);
+
+  // Whether this user is the sole remaining family member. If so, deleting the
+  // account wipes all family data; otherwise the user just leaves the family.
+  const isLastMember = (family?.memberUids?.length ?? 1) <= 1;
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      t('settings.deleteAccount'),
+      isLastMember
+        ? t('settings.deleteAccountWarnOwnerLast')
+        : t('settings.deleteAccountWarnMember'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: confirmDeleteAccount },
+      ]
+    );
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      t('settings.deleteAccountFinalTitle'),
+      t('settings.deleteAccountFinalBody'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('settings.deleteAccountConfirmButton'),
+          style: 'destructive',
+          onPress: doDeleteAccount,
+        },
+      ]
+    );
+  }
+
+  async function doDeleteAccount() {
+    setDeleting(true);
+    try {
+      // On success the auth listener signs the user out and routes to login.
+      await deleteAccount();
+    } catch (e: any) {
+      setDeleting(false);
+      Alert.alert(t('common.error'), e?.message ?? t('settings.deleteAccountError'));
+    }
+  }
 
   async function handleLanguageToggle(val: boolean) {
     await setLanguage(val ? 'he' : 'en');
@@ -169,8 +213,23 @@ export default function SettingsScreen() {
           onPress={logout}
           textColor={Colors.danger}
           style={styles.logoutButton}
+          disabled={deleting}
         >
           {t('auth.logout')}
+        </Button>
+      </View>
+
+      {/* Danger zone — account deletion */}
+      <View style={styles.deleteContainer}>
+        <Button
+          mode="text"
+          onPress={handleDeleteAccount}
+          textColor={Colors.danger}
+          icon="delete-forever"
+          loading={deleting}
+          disabled={deleting}
+        >
+          {t('settings.deleteAccount')}
         </Button>
       </View>
     </View>
@@ -184,4 +243,5 @@ const styles = StyleSheet.create({
   shareButton: { borderRadius: 8 },
   logoutContainer: { padding: 16, marginTop: 16 },
   logoutButton: { borderColor: Colors.danger },
+  deleteContainer: { paddingHorizontal: 16, alignItems: 'center' },
 });
