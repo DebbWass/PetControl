@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions, Alert } from 'react-native';
 import { Text, TextInput, Button, HelperText, Checkbox } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
-import { loginUser } from '../../src/services/firebase/auth';
+import { loginUser, sendPasswordReset } from '../../src/services/firebase/auth';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 
@@ -21,7 +21,9 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // Load saved credentials on mount
+  // Load saved email on mount. We intentionally never persist the password —
+  // the signed-in session itself is kept by Firebase Auth persistence, and
+  // "Remember me" only pre-fills the email address for convenience.
   useEffect(() => {
     AsyncStorage.getItem(CREDENTIALS_KEY)
       .then((raw) => {
@@ -29,7 +31,6 @@ export default function LoginScreen() {
         const saved = JSON.parse(raw);
         if (saved?.remember) {
           setEmail(saved.email ?? '');
-          setPassword(saved.password ?? '');
           setRememberMe(true);
         }
       })
@@ -47,11 +48,11 @@ export default function LoginScreen() {
       const user = await loginUser(email.trim(), password);
       setUser(user);
 
-      // Persist or clear credentials
+      // Persist only the email address (never the password).
       if (rememberMe) {
         await AsyncStorage.setItem(
           CREDENTIALS_KEY,
-          JSON.stringify({ email: email.trim(), password, remember: true })
+          JSON.stringify({ email: email.trim(), remember: true })
         );
       } else {
         await AsyncStorage.removeItem(CREDENTIALS_KEY);
@@ -63,6 +64,26 @@ export default function LoginScreen() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleForgotPassword() {
+    const target = email.trim();
+    if (!target) {
+      setError(t('auth.enterEmailFirst'));
+      return;
+    }
+    setError('');
+    try {
+      await sendPasswordReset(target);
+    } catch (e: any) {
+      // Don't reveal whether an account exists for this email — only surface
+      // genuine failures (network, malformed address, etc.).
+      if (e?.code && e.code !== 'auth/user-not-found') {
+        setError(e.message ?? t('common.error'));
+        return;
+      }
+    }
+    Alert.alert(t('auth.resetSentTitle'), t('auth.resetSentBody'));
   }
 
   const { width } = useWindowDimensions();
@@ -129,6 +150,16 @@ export default function LoginScreen() {
           buttonColor={Colors.primary}
         >
           {t('auth.loginButton')}
+        </Button>
+
+        <Button
+          mode="text"
+          onPress={handleForgotPassword}
+          disabled={loading}
+          style={styles.linkButton}
+          textColor={Colors.textSecondary}
+        >
+          {t('auth.forgotPassword')}
         </Button>
 
         <Button

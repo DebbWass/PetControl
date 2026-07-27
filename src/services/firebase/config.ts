@@ -1,7 +1,18 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getAuth, type Auth, type Persistence } from 'firebase/auth';
+import * as firebaseAuth from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// getReactNativePersistence ships only in the React Native build of firebase/auth,
+// so it is absent from the default type definitions. Metro resolves the real
+// implementation at runtime; we reach it here through a typed cast.
+const getReactNativePersistence = (
+  firebaseAuth as unknown as {
+    getReactNativePersistence: (storage: unknown) => Persistence;
+  }
+).getReactNativePersistence;
 
 /**
  * Firebase configuration.
@@ -29,7 +40,20 @@ const firebaseConfig = {
 // Prevent duplicate initialization in Expo hot-reload
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-export const auth = getAuth(app);
+// Initialize Auth with AsyncStorage persistence so the signed-in session
+// survives app restarts. Plain getAuth() uses in-memory persistence on React
+// Native, which would sign the user out every time the app is closed.
+let authInstance: Auth;
+try {
+  authInstance = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch {
+  // initializeAuth throws if it was already initialized (e.g. Fast Refresh).
+  authInstance = getAuth(app);
+}
+
+export const auth = authInstance;
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 

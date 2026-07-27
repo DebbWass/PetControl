@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   updateProfile,
   onAuthStateChanged,
@@ -149,6 +150,11 @@ export async function loadUserProfile(firebaseUser: User): Promise<AppUser> {
     throw new Error('MEMBER_DOC_NOT_FOUND');
   }
   return { ...memberSnap.data(), uid: firebaseUser.uid } as AppUser;
+}
+
+/** Send a password-reset email to the given address. */
+export function sendPasswordReset(email: string): Promise<void> {
+  return sendPasswordResetEmail(auth, email.trim());
 }
 
 /** Load Family document from Firestore */

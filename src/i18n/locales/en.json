@@ -22,7 +22,10 @@
     "hasAccount": "Already have an account?",
     "logout": "Logout",
     "forgotPassword": "Forgot password",
-    "rememberMe": "Remember me"
+    "rememberMe": "Remember me",
+    "enterEmailFirst": "Please enter your email first",
+    "resetSentTitle": "Reset link sent",
+    "resetSentBody": "If an account exists for this email, a password reset link has been sent. Check your inbox (and your spam folder)."
   },
   "family": {
     "create": "Create Family",
