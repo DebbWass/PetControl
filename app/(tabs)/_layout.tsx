@@ -57,9 +57,12 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* AI assistant is temporarily hidden from the UI. The screen and all its
+          logic remain in ai.tsx — to bring the tab back, remove `href: null`. */}
       <Tabs.Screen
         name="ai"
         options={{
+          href: null,
           title: t('tabs.ai'),
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="robot" color={color} size={isWeb ? 28 : size} />

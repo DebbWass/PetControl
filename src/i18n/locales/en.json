@@ -279,7 +279,8 @@
     "assistant": "AI Assistant",
     "thinking": "Thinking...",
     "inputPlaceholder": "Ask a question about your pets...",
-    "error": "Error getting response"
+    "error": "Error getting response",
+    "limitReached": "You've reached today's question limit. Please try again tomorrow. 🐾"
   },
   "medicalFile": {
     "title": "Medical File",

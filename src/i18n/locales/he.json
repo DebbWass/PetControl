@@ -284,7 +284,8 @@
     "assistant": "עוזר AI",
     "thinking": "חושב...",
     "inputPlaceholder": "שאל שאלה על החיות שלך...",
-    "error": "שגיאה בקבלת תשובה"
+    "error": "שגיאה בקבלת תשובה",
+    "limitReached": "הגעת למכסת השאלות היומית. נסו שוב מחר. 🐾"
   },
   "medicalFile": {
     "title": "תיק רפואי",

@@ -12,6 +12,9 @@ const db = admin.firestore();
 // Proxies to Claude API so the API key stays server-side.
 // Set the key: firebase functions:secrets:set ANTHROPIC_API_KEY
 // (or via Firebase Console → Functions → Secrets)
+// Per-user daily cap on AI questions. Each question costs money at the Claude
+// API, so this protects against runaway bills / abuse from a single account.
+const AI_DAILY_LIMIT = 20;
 exports.askPetAI = (0, https_1.onCall)({
     region: 'europe-west1',
     secrets: ['ANTHROPIC_API_KEY'],
@@ -20,10 +23,24 @@ exports.askPetAI = (0, https_1.onCall)({
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Must be authenticated');
     }
+    const uid = request.auth.uid;
     const { message, petContext, language } = request.data;
     if (!message?.trim()) {
         throw new https_1.HttpsError('invalid-argument', 'message is required');
     }
+    // Rate limit: atomically bump this user's daily counter, rejecting once the
+    // cap is hit. Stored in a server-only collection (no client access).
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+    const usageRef = db.doc(`aiUsage/${uid}`);
+    await db.runTransaction(async (tx) => {
+        const snap = await tx.get(usageRef);
+        const data = (snap.exists ? snap.data() : {});
+        const count = data.date === today ? (data.count ?? 0) : 0;
+        if (count >= AI_DAILY_LIMIT) {
+            throw new https_1.HttpsError('resource-exhausted', 'DAILY_AI_LIMIT_REACHED');
+        }
+        tx.set(usageRef, { date: today, count: count + 1 });
+    });
     const anthropic = new sdk_1.default({
         apiKey: process.env.ANTHROPIC_API_KEY,
     });

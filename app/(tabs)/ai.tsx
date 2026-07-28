@@ -94,12 +94,18 @@ export default function AIAssistantScreen() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (e: any) {
+      const limitReached =
+        e?.code === 'functions/resource-exhausted' ||
+        e?.message === 'DAILY_AI_LIMIT_REACHED';
+      const text = limitReached
+        ? t('ai.limitReached')
+        : isHe
+          ? `שגיאה: ${e.message ?? 'לא ניתן לקבל תשובה כרגע. ודא שה-Cloud Function פרוסה.'}`
+          : `Error: ${e.message ?? 'Could not get a response. Make sure the Cloud Function is deployed.'}`;
       const errMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        text: isHe
-          ? `שגיאה: ${e.message ?? 'לא ניתן לקבל תשובה כרגע. ודא שה-Cloud Function פרוסה.'}`
-          : `Error: ${e.message ?? 'Could not get a response. Make sure the Cloud Function is deployed.'}`,
+        text,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errMsg]);
