@@ -135,7 +135,7 @@ export default function VaccinesScreen() {
       ? customName.trim()
       : (i18n.language === 'he' ? selectedVaccine.nameHe : selectedVaccine.nameEn);
 
-    if (!vaccineName) { setError(t('common.required')); return; }
+    if (!vaccineName) { setError(t('common.missingFields', { fields: t('vaccines.customName') })); return; }
 
     const vaccDate = parseDateStr(vaccineDateInput);
     if (!vaccDate) { setError(t('appointments.invalidDate')); return; }

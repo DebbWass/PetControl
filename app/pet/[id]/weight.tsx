@@ -63,9 +63,13 @@ export default function WeightScreen() {
   }
 
   async function handleSave() {
+    if (!weightInput.trim()) {
+      setError(t('common.missingFields', { fields: t('weight.weightKg') }));
+      return;
+    }
     const kg = parseFloat(weightInput.replace(',', '.'));
     if (isNaN(kg) || kg <= 0) {
-      setError(t('common.required'));
+      setError(t('common.invalidNumber'));
       return;
     }
     setLoading(true);

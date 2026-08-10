@@ -306,6 +306,8 @@
     "error": "שגיאה",
     "success": "בוצע בהצלחה",
     "required": "שדה חובה",
+    "missingFields": "יש למלא את השדות הבאים: {{fields}}",
+    "invalidNumber": "יש להזין מספר תקין",
     "optional": "אופציונלי",
     "notes": "הערות",
     "date": "תאריך",

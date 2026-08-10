@@ -90,7 +90,7 @@ export default function TreatmentsScreen() {
   }
 
   async function handleAdd() {
-    if (!product.trim()) { setError(t('common.required')); return; }
+    if (!product.trim()) { setError(t('common.missingFields', { fields: t('treatments.product') })); return; }
 
     const treatmentDate = parseDateStr(treatmentDateInput);
     if (!treatmentDate) { setError(t('appointments.invalidDate')); return; }

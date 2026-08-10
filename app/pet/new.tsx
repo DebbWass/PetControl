@@ -45,7 +45,7 @@ export default function NewPetScreen() {
 
   async function handleSave() {
     if (!name.trim()) {
-      setError(t('common.required'));
+      setError(t('common.missingFields', { fields: t('pets.name') }));
       return;
     }
     if (!user) return;

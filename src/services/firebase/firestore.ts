@@ -44,7 +44,7 @@ export const paths = {
 
 export async function addPet(familyId: string, petData: Omit<Pet, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
   const ref = await addDoc(collection(db, paths.pets(familyId)), {
-    ...petData,
+    ...stripUndefined(petData as Record<string, unknown>),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -53,7 +53,7 @@ export async function addPet(familyId: string, petData: Omit<Pet, 'id' | 'create
 
 export async function updatePet(familyId: string, petId: string, data: Partial<Pet>): Promise<void> {
   await updateDoc(doc(db, paths.pets(familyId), petId), {
-    ...data,
+    ...stripUndefined(data as Record<string, unknown>),
     updatedAt: serverTimestamp(),
   });
 }

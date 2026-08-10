@@ -301,6 +301,8 @@
     "error": "Error",
     "success": "Success",
     "required": "Required",
+    "missingFields": "Please fill in the following: {{fields}}",
+    "invalidNumber": "Please enter a valid number",
     "optional": "Optional",
     "notes": "Notes",
     "date": "Date",
