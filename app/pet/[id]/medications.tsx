@@ -127,8 +127,11 @@ export default function MedicationsScreen() {
   }
 
   async function handleSave() {
-    if (!nameInput.trim() || !dosageInput.trim()) {
-      setError(t('common.required'));
+    const missing: string[] = [];
+    if (!nameInput.trim()) missing.push(t('medications.name'));
+    if (!dosageInput.trim()) missing.push(t('medications.dosage'));
+    if (missing.length > 0) {
+      setError(t('common.missingFields', { fields: missing.join(', ') }));
       return;
     }
     const fv = parseInt(frequencyValue, 10) || 1;

@@ -75,9 +75,15 @@ export default function FoodScreen() {
   }
 
   async function handleSave() {
-    if (!foodName.trim() || !amountInput) { setError(t('common.required')); return; }
+    const missing: string[] = [];
+    if (!foodName.trim()) missing.push(t('food.name'));
+    if (!amountInput.trim()) missing.push(t('food.amount'));
+    if (missing.length > 0) {
+      setError(t('common.missingFields', { fields: missing.join(', ') }));
+      return;
+    }
     const amount = parseFloat(amountInput.replace(',', '.'));
-    if (isNaN(amount) || amount <= 0) { setError(t('common.required')); return; }
+    if (isNaN(amount) || amount <= 0) { setError(t('common.invalidNumber')); return; }
     setLoading(true);
     try {
       if (editingRecord) {

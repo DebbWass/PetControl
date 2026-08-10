@@ -93,7 +93,7 @@ export default function AppointmentsScreen() {
   }
 
   async function handleSave() {
-    if (!titleInput.trim()) { setError(t('common.required')); return; }
+    if (!titleInput.trim()) { setError(t('common.missingFields', { fields: t('appointments.titleField') })); return; }
     const parsedDate = parseAppointmentDate(dateInput, timeInput);
     if (!parsedDate) { setError(t('appointments.invalidDate')); return; }
 
@@ -275,6 +275,6 @@ const styles = StyleSheet.create({
   chip: { marginRight: 4 },
   notes: { color: Colors.textSecondary, fontSize: 13 },
   dateTimeRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  dateInput: { flex: 2 },
-  timeInput: { flex: 1 },
+  dateInput: { flex: 3 },
+  timeInput: { flex: 2 },
 });
