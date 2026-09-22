@@ -14,6 +14,7 @@
 | 4 | 2026-04-14 | ספרינט 3 | FCM token registration, local notification scheduler, Cloud Functions daily reminder | ~3.5 | services/notifications.ts, functions/src/index.ts, עדכון _layout.tsx |
 | 5 | 2026-04-14 | ספרינט 4 | Dashboard (today/upcoming/overdue), pet photo upload (Storage), Settings notification prefs + language restart | ~3.5 | useDashboard.ts, storage.ts, עדכון index.tsx + reminders.tsx + settings.tsx |
 | 6 | 2026-04-14 | ספרינט 5 | EAS build config (eas.json), app.json v1.2.0, firestore.indexes.json | ~0.5 | הכנה לבנייה |
+| 7 | 2026-09-22 | ספרינט 6 | ייצוא תיק רפואי ל-PDF: `src/services/pdf/` (5 מודולים), `getRecords()`, תפריט שלוש נקודות, מפתחות i18n, 25 בדיקות יחידה | ~3.0 | אישור פורמט מראש; נדרש dev client חדש |
 
 ---
 
@@ -27,7 +28,8 @@
 | ספרינט 3 | 3.5 | 8–10 | 41% ✅ |
 | ספרינט 4 | 3.5 | 6–8 | 50% ✅ |
 | ספרינט 5 | 0.5 | 4–6 | 10% 🔄 |
-| **סה"כ** | **18.5** | **40–50** | **~43%** |
+| ספרינט 6 | 3.0 | 5–7 | 50% ✅ |
+| **סה"כ** | **21.5** | **45–57** | **~42%** |
 
 > **הערה:** הספרינטים הושלמו מהר יותר מהמשוער כי Claude ביצע את כתיבת הקוד. שעות העבודה האנושיות (בדיקה, Firebase Console, הגדרות) עשויות להיות גבוהות יותר.
 
@@ -41,7 +43,9 @@
 | Firebase Console: Deploy functions + indexes | 1.0 |
 | `eas build -p android --profile preview` → בדיקת APK | 1.0 |
 | בדיקת אפליקציה על שני מכשירים | 1.5 |
-| **סה"כ** | **~4 שעות** |
+| `eas build -p android --profile development` (נדרש עבור מודולי ה-PDF) | 1.0 |
+| בדיקת ייצוא ה-PDF במכשיר: A4, שיתוף, הדפסה, עברית + אנגלית | 1.0 |
+| **סה"כ** | **~6 שעות** |
 
 ---
 

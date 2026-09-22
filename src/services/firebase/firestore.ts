@@ -186,6 +186,17 @@ export async function deleteRecord(collectionPath: string, docId: string): Promi
   await deleteDoc(doc(db, collectionPath, docId));
 }
 
+/** One-shot read of a sub-collection. Mirrors `subscribeToCollection` but
+ *  resolves once instead of subscribing – used by the PDF export, which needs
+ *  a consistent snapshot rather than a live feed. */
+export async function getRecords<T>(
+  collectionPath: string,
+  constraints: QueryConstraint[] = []
+): Promise<T[]> {
+  const snap = await getDocs(query(collection(db, collectionPath), ...constraints));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as T));
+}
+
 export function subscribeToCollection<T>(
   collectionPath: string,
   constraints: QueryConstraint[],

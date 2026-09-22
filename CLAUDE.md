@@ -20,6 +20,7 @@ Pet health management app for families. Android-only, React Native + Expo + Fire
 | Cloud Functions | Firebase Cloud Functions TypeScript (Gen 2) | — |
 | i18n | i18next + react-i18next | ^26 / ^17 |
 | Charts | react-native-chart-kit | ^6.12 |
+| PDF export | expo-print + expo-sharing + expo-file-system | ~15.0 / ~14.0 / ~19.0 |
 
 ---
 
@@ -51,6 +52,12 @@ src/
       firestore.ts          # Firestore CRUD helpers
     notifications.ts        # FCM token registration + local reminder scheduling
     storage.ts              # uploadPetPhoto to Firebase Storage
+    pdf/                    # Medical-file PDF export (A4)
+      types.ts              # Report view models (plain Date, no Timestamp)
+      weightChartSvg.ts     # Pure: inline SVG weight chart
+      medicalReportHtml.ts  # Pure: builds the full A4 HTML document
+      medicalReportData.ts  # One-shot Firestore gather + photo → data URI
+      exportMedicalReport.ts# Orchestrator: gather → html → PDF → share / print
   hooks/
     usePets.ts              # Zustand-backed pets hook
     useHealthRecords.ts     # useMedications, useVaccines, useTreatments, useFood, useWeights
@@ -109,6 +116,7 @@ families/{familyId}
     treatments/{treatmentId}
     appointments/{appointmentId}
     food/{foodId}
+    documents/{documentId}    # MedicalDocument – uploaded scans / test results
 
 users/{userId}              # Top-level index: uid → familyId (login lookup)
 ```
@@ -139,6 +147,18 @@ users/{userId}              # Top-level index: uid → familyId (login lookup)
 ### FCM tokens
 Use `getDevicePushTokenAsync()` (raw FCM token). Tokens are stored in `families/{familyId}/members/{uid}.fcmTokens[]` to support multiple devices per user.
 
+### PDF export (`src/services/pdf/`)
+Entry point is the overflow menu on `app/pet/[id].tsx` → `generateMedicalReport()`.
+
+- **Pure builders.** `medicalReportHtml.ts` and `weightChartSvg.ts` import no react-native/expo code, because jest runs with `testEnvironment: "node"`. All locale behaviour arrives through an injected `ReportLabels` adapter (`t` / `formatDate` / `formatDateTime` / `isRTL` / `lang`) — the screen passes the real i18next functions, tests pass stubs.
+- **View models use plain `Date`**, never Firestore `Timestamp`. Conversion happens once in `medicalReportData.ts`.
+- **One-shot gather.** `medicalReportData.ts` uses `getRecords()` (in `firestore.ts`), not the `useHealthRecords` hooks — those are live subscriptions and `useMedications` filters out discontinued meds, which the report needs.
+- **Food is capped** at `FOOD_RECORD_LIMIT` (30) rows plus a `getCountFromServer` total; every other category is exported in full.
+- **A4 must be passed explicitly**: `printToFileAsync({ width: 595, height: 842 })` — the default is US Letter.
+- **No page numbers.** Android's WebView print engine does not support CSS `@page` margin boxes or `counter(page)`. Pagination relies on `<thead>` (repeats automatically) and a `position: fixed` footer (repeats on every page).
+- The pet photo is inlined as a base64 `data:` URI so the PDF renders offline; any failure falls back to the species emoji.
+- The three native modules are required lazily in a try/catch — a dev client built before they were installed shows `export.moduleMissing` instead of crashing.
+
 ---
 
 ## i18n and RTL
@@ -166,6 +186,9 @@ Use `getDevicePushTokenAsync()` (raw FCM token). Tokens are stored in `families/
 - **Food tracking** is separate from health records (different Firestore sub-collection).
 - `nextDueDate` on medications and vaccines is **auto-calculated** by `medicationUtils.ts` — do not set it manually from screens.
 - Never use Expo push proxy — always use raw FCM tokens.
+- `expo-file-system`'s `downloadAsync` / `copyAsync` / `readAsStringAsync` live at **`expo-file-system/legacy`** in SDK 54; the default export is the new `File`/`Directory` API.
+- Adding a native module (as the PDF export did) requires a **new dev client / EAS build** — a Metro reload will not pick it up.
+- Plural strings use i18next v4 suffixes (`_one` / `_two` / `_other`). Hebrew has a `two` category, English does not — add all three keys to both locale files so the key sets stay identical.
 
 ---
 
@@ -189,3 +212,4 @@ eas build -p android --profile preview    # generates APK
 | 3 | Push notifications: FCM registration, local reminders, Cloud Function daily scheduler |
 | 4 | Dashboard (today/upcoming/overdue), pet photo upload, settings + language restart |
 | 5 | EAS build config, app version 1.2.0, Firestore indexes |
+| 6 | Medical-file PDF export: A4 report, share + print, pet-profile overflow menu |

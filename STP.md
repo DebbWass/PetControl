@@ -25,6 +25,7 @@ The manual testing effort aims to validate that PetControl:
 8. Presents all UI in Hebrew (RTL default) and English (LTR), switching language with an app restart.
 9. Handles invalid input, empty states, network failures, and permission denials gracefully with user-facing messages.
 10. Keeps the AI assistant server-side (API key never exposed to the client) and returns useful responses.
+11. Exports a complete, accurate medical-file PDF for a pet in A4 format, in the active app language, and offers it for sharing and printing.
 
 ---
 
@@ -38,6 +39,7 @@ The following areas are **in scope** for manual testing:
 | Family management | Invite code generation, sharing, joining, membership isolation |
 | Pets | Create, edit, photo upload, soft delete, mark deceased, reactivate, active/inactive/all filter |
 | Health records | Medications, Vaccines, Treatments, Appointments, Weight, Food, Medical Documents |
+| Medical file PDF export | Data gathering, A4 rendering, section accuracy, RTL/LTR, share sheet, print dialog, empty/large datasets, offline fallbacks |
 | Dashboard & Reminders | Today / Upcoming (7 days) / Overdue grouping, mark-as-done, add-reminder flow |
 | Due-date logic | `nextDueDate` auto-calculation, overdue advancement, mark-done advancement |
 | Notifications | Local medication reminders, FCM token registration, cloud daily reminders, quiet hours, notification preferences |
@@ -56,7 +58,8 @@ The following areas are **in scope** for manual testing:
 |---|---|
 | iOS platform | The app is Android-only by design (see CLAUDE.md). No iOS-specific code exists. |
 | Web platform behavior | Some code paths guard `Platform.OS === 'web'`, but web is not a supported production target; only smoke-level observation, not full coverage. |
-| Automated/unit/integration test code | This is a **manual** test plan. Existing Jest unit tests (`medicationUtils.test.ts`, `petsStore.test.ts`) are noted but not authored or extended here. |
+| Automated/unit/integration test code | This is a **manual** test plan. Existing Jest unit tests (`medicationUtils.test.ts`, `petsStore.test.ts`, `medicalReportHtml.test.ts`, `weightChartSvg.test.ts`) are noted but not authored or extended here. |
+| Byte-level PDF validation | The PDF is verified by opening it in a viewer and reading it as a human. Parsing the PDF structure programmatically is out of scope. |
 | Load / stress / performance benchmarking | Only manual, observational performance checks are included (see §24). |
 | Penetration testing / destructive security testing | Only non-destructive manual security checks (access control, isolation) are included. |
 | Firebase infrastructure SLAs | Availability of Firebase itself is assumed. |
@@ -110,6 +113,7 @@ Each family can hold unlimited pets. Each pet has a profile and seven health sub
 15. **Notifications** — local scheduling/cancellation, FCM registration, cloud daily reminders, quiet hours, deep-link on tap.
 16. **i18n / RTL** — Hebrew default, English secondary, restart flow, localized dates.
 17. **Security / Data Isolation** — Firestore rules enforcement across families and users.
+18. **Medical File PDF Export** — pet-profile overflow menu, one-shot gather of all seven sub-collections, A4 HTML/PDF rendering (cover, weight + SVG chart, medications split active/discontinued, vaccines, treatments, appointments split scheduled/history, food capped at 30, document index, summary), status pills, overdue/upcoming alerts, share sheet, print dialog, Hebrew RTL / English LTR.
 
 ---
 
@@ -341,6 +345,7 @@ Verify: the app recovers after network loss during save (queued write completes 
 | Functions | `askPetAI` and `sendDailyReminders` deployed to `europe-west1`; `ANTHROPIC_API_KEY` secret set |
 | Tools | Firebase Console, Android logcat / device logs, a second Android device or account for isolation/cross-member tests |
 | Network | Controllable connectivity (airplane mode toggling) for offline tests |
+| PDF export | Build must include `expo-print`, `expo-sharing`, `expo-file-system`. A PDF viewer (Drive/Files/Gmail) and, for print tests, either a configured printer or Android's "Save as PDF" print target |
 
 ---
 
@@ -353,6 +358,17 @@ Verify: the app recovers after network loss during save (queued write completes 
 - **Treatments, appointments, weights, food, documents** with representative and boundary values.
 - Dates spanning **past (overdue), today, and near-future (≤7 days)** to exercise dashboard grouping.
 
+**Additional pets required for the PDF export (EXP) cases:**
+
+| Seed pet | Purpose |
+|---|---|
+| `FullPet` | At least 3 records in **every** category (weights, active + discontinued medications, vaccines, treatments, scheduled + completed + cancelled appointments, food, documents), a photo, a microchip number, a colour, one overdue treatment and one vaccine due within 30 days. Exercises every section at once. |
+| `EmptyPet` | Name and species only — no records in any category, no photo. Exercises every empty state. |
+| `OnePointPet` | Exactly one weight record. Verifies the chart is omitted while the table renders. |
+| `FlatPet` | Three weight records with the **same** weight value. Verifies the chart handles a zero value-range. |
+| `BulkPet` | 200+ food records (seed via the Firebase Console) and a long medication history. Verifies the 30-row food cap, the true total, and multi-page pagination. |
+| `LongTextPet` | Notes, product names and a pet name at maximum realistic length, including quotes, `<`, `&`, and emoji. Verifies escaping and that text does not overflow the page. |
+
 ---
 
 ## 33. Dependencies
@@ -362,6 +378,9 @@ Verify: the app recovers after network loss during save (queued write completes 
 - `ANTHROPIC_API_KEY` secret configured for the AI function.
 - `expo-document-picker` installed for PDF selection (graceful fallback if missing).
 - Composite Firestore indexes for dashboard queries (vaccines/treatments/appointments ordered by date).
+- `expo-print`, `expo-sharing`, and `expo-file-system` installed **and present in the running dev client / APK**. These are native modules — a build produced before they were added will not have them, and the export shows `export.moduleMissing` instead of running. Verify the build is current before executing any EXP test case.
+- A PDF viewer app on the device (Google Drive, Files, or Gmail) for opening the shared result.
+- Network access for the Heebo web font and for the `getCountFromServer` food-count aggregate; both degrade gracefully offline.
 
 ---
 
@@ -377,6 +396,25 @@ Verify: the app recovers after network loss during save (queued write completes 
 | Time zone handling | Medium | Cloud reminders run Asia/Jerusalem; local due-date logic uses device time; mismatches possible for travelers. |
 | Food records have no delete UI | Low | Only add/edit exposed; erroneous entries cannot be removed in-app. |
 | Silent error swallowing in save flows | Low/Medium | Several `.catch(() => {})` may hide failures from the tester; verify via Firestore. |
+| PDF export needs a rebuilt dev client | High (blocking) | `expo-print` / `expo-sharing` / `expo-file-system` are native. A stale build makes every EXP case unexecutable. Confirm the build post-dates the dependency install before starting. |
+| PDF page numbers are absent by design | Low | Android's WebView print engine does not support CSS `@page` margin boxes or `counter(page)`. Do **not** raise a defect for missing page numbers; the footer carries pet name + generation date only. |
+| RTL rendering inside the print WebView | Medium | The print engine is separate from the React Native view tree, so app-level `I18nManager.forceRTL` does not apply. Direction comes from `dir="rtl"` on `<html>`. Hebrew must be verified visually in the produced PDF, not just in the app. |
+| Heebo font loads over the network | Low | Offline, the PDF falls back to the device's Hebrew system font. Layout may shift slightly. This is expected, not a defect. |
+| Large datasets produce long PDFs | Medium | Every category except food is exported in full. A pet with years of history can produce a many-page document; watch for slow generation and for table rows split across pages. |
+| Food count uses a server aggregate | Low | `getCountFromServer` needs a round trip. Offline it falls back to the number of rows fetched, so the "of N" total can under-report. Expected behavior. |
+| Pet photo inlining can fail silently | Low | A 404 / expired Storage URL falls back to the species emoji. The export must still succeed. |
+
+---
+
+## 34a. Risk-Based Focus for the PDF Export
+
+The export is read-only — it creates no Firestore documents and uploads nothing — so the risk profile is **accuracy and rendering**, not data corruption. Testing should concentrate on:
+
+1. **Fidelity** — every value in the PDF matches what the corresponding app screen shows.
+2. **Completeness** — discontinued medications, past vaccines/treatments/appointments, and fields never shown in the UI (`microchipNumber`, `color`, vaccine `batchNumber`/`clinic`, appointment `clinicPhone`) all appear.
+3. **Pagination** — nothing is clipped at a page edge; table headers repeat on continuation pages.
+4. **Localization** — correct direction, translated headings, and grammatical plurals in both languages.
+5. **Degradation** — offline, no photo, no records, and huge record counts all produce a usable document rather than a failure.
 
 ---
 
@@ -425,7 +463,7 @@ Each defect record should include: Title, related Test Case ID, Severity (Critic
 
 1. **P1 (Critical):** Authentication, family isolation/security, add pet, add medication + due date, data persistence.
 2. **P2 (High):** Vaccines/treatments/appointments CRUD + due dates, dashboard/reminders grouping, notifications, cross-member sync.
-3. **P3 (Medium):** Weight/food charts, medical documents, AI assistant, settings, language switch.
+3. **P3 (Medium):** Weight/food charts, medical documents, medical-file PDF export, AI assistant, settings, language switch.
 4. **P4 (Low):** Cosmetic/UI, empty states, copy, exploratory polish.
 
 ---

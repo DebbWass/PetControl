@@ -15,9 +15,17 @@ import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_LIST, SPECIES_MAP } from '../../src/constants/species';
 import { Species, Sex, Pet } from '../../src/types';
-import { formatAge, formatDate, toTimestamp } from '../../src/utils/dateUtils';
+import { formatAge, formatDate, formatDateTime, toTimestamp } from '../../src/utils/dateUtils';
 import { DateTimeInput } from '../../src/components/DateTimeInput';
 import { uploadPetPhoto } from '../../src/services/storage';
+import {
+  canShare,
+  generateMedicalReport,
+  isExportAvailable,
+  MedicalReportResult,
+  printMedicalReport,
+  shareMedicalReport,
+} from '../../src/services/pdf/exportMedicalReport';
 
 export default function PetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,6 +53,13 @@ export default function PetDetailScreen() {
   const [deathDateInput, setDeathDateInput] = useState('');
   const [deceasedLoading, setDeceasedLoading] = useState(false);
   const [deceasedError, setDeceasedError] = useState('');
+
+  // Header overflow menu + PDF export state
+  const [actionsMenuVisible, setActionsMenuVisible] = useState(false);
+  const [exportVisible, setExportVisible] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportResult, setExportResult] = useState<MedicalReportResult | null>(null);
+  const [shareAvailable, setShareAvailable] = useState(false);
 
   if (!pet) {
     return (
@@ -188,6 +203,58 @@ export default function PetDetailScreen() {
     );
   }
 
+  async function handleExport() {
+    setActionsMenuVisible(false);
+
+    if (!isExportAvailable()) {
+      Alert.alert(t('export.moduleMissing'), t('export.moduleMissingHint'));
+      return;
+    }
+
+    setExportResult(null);
+    setExportLoading(true);
+    setExportVisible(true);
+
+    try {
+      const result = await generateMedicalReport(user!.familyId, pet!, {
+        t: (key, vars) => t(key, vars as any) as string,
+        formatDate: (d) => formatDate(d),
+        formatDateTime: (d) => formatDateTime(d),
+        isRTL: isHe,
+        lang: i18n.language,
+      });
+      setExportResult(result);
+      setShareAvailable(await canShare());
+    } catch (e: any) {
+      setExportVisible(false);
+      const missing = e?.message === 'EXPORT_MODULE_MISSING';
+      Alert.alert(
+        missing ? t('export.moduleMissing') : t('export.error'),
+        missing ? t('export.moduleMissingHint') : (e?.message ?? t('common.error'))
+      );
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
+  async function handleShareReport() {
+    if (!exportResult) return;
+    try {
+      await shareMedicalReport(exportResult.uri, t('export.shareTitle'));
+    } catch (e: any) {
+      Alert.alert(t('export.error'), e?.message ?? t('common.error'));
+    }
+  }
+
+  async function handlePrintReport() {
+    if (!exportResult) return;
+    try {
+      await printMedicalReport(exportResult.html);
+    } catch (e: any) {
+      Alert.alert(t('export.error'), e?.message ?? t('common.error'));
+    }
+  }
+
   const sections = [
     { icon: 'scale', label: t('weight.title'), route: `/pet/${id}/weight` },
     { icon: 'pill', label: t('medications.title'), route: `/pet/${id}/medications` },
@@ -204,17 +271,61 @@ export default function PetDetailScreen() {
         options={{
           title: pet.name,
           headerRight: () => (
-            <View style={styles.headerButtons}>
-              <IconButton icon="pencil" iconColor={Colors.primary} onPress={openEdit} />
+            <Menu
+              visible={actionsMenuVisible}
+              onDismiss={() => setActionsMenuVisible(false)}
+              anchor={
+                <IconButton
+                  icon="dots-vertical"
+                  iconColor={Colors.primary}
+                  onPress={() => setActionsMenuVisible(true)}
+                />
+              }
+            >
+              <Menu.Item
+                leadingIcon="pencil"
+                title={t('pets.editPet')}
+                onPress={() => {
+                  setActionsMenuVisible(false);
+                  openEdit();
+                }}
+              />
+              <Menu.Item
+                leadingIcon="file-pdf-box"
+                title={t('export.menu')}
+                onPress={handleExport}
+              />
               {isInactive ? (
-                <IconButton icon="restore" iconColor={Colors.primary} onPress={confirmReactivate} />
+                <Menu.Item
+                  leadingIcon="restore"
+                  title={t('pets.reactivate')}
+                  onPress={() => {
+                    setActionsMenuVisible(false);
+                    confirmReactivate();
+                  }}
+                />
               ) : (
                 <>
-                  <IconButton icon="heart-broken" iconColor={Colors.textSecondary} onPress={openDeceased} />
-                  <IconButton icon="delete" iconColor={Colors.danger} onPress={confirmDelete} />
+                  <Menu.Item
+                    leadingIcon="heart-broken"
+                    title={t('pets.markDeceased')}
+                    onPress={() => {
+                      setActionsMenuVisible(false);
+                      openDeceased();
+                    }}
+                  />
+                  <Menu.Item
+                    leadingIcon="delete"
+                    title={t('pets.deletePet')}
+                    titleStyle={{ color: Colors.danger }}
+                    onPress={() => {
+                      setActionsMenuVisible(false);
+                      confirmDelete();
+                    }}
+                  />
                 </>
               )}
-            </View>
+            </Menu>
           ),
         }}
       />
@@ -423,6 +534,49 @@ export default function PetDetailScreen() {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      {/* Medical file PDF export Dialog */}
+      <Portal>
+        <Dialog
+          visible={exportVisible}
+          dismissable={!exportLoading}
+          onDismiss={() => setExportVisible(false)}
+        >
+          <Dialog.Title>
+            {exportLoading ? t('export.generating') : t('export.ready')}
+          </Dialog.Title>
+          <Dialog.Content>
+            {exportLoading ? (
+              <View style={styles.exportProgress}>
+                <ActivityIndicator color={Colors.primary} />
+                <Text variant="bodyMedium" style={styles.exportHint}>
+                  {t('export.generatingHint', { name: pet.name })}
+                </Text>
+              </View>
+            ) : (
+              <Text variant="bodySmall" style={styles.exportFileName}>
+                {exportResult?.fileName ?? ''}
+              </Text>
+            )}
+          </Dialog.Content>
+          {!exportLoading && (
+            <Dialog.Actions>
+              <Button onPress={() => setExportVisible(false)}>{t('common.cancel')}</Button>
+              <Button icon="printer" onPress={handlePrintReport}>
+                {t('export.print')}
+              </Button>
+              <Button
+                mode="contained"
+                icon="share-variant"
+                disabled={!shareAvailable}
+                onPress={handleShareReport}
+              >
+                {t('export.share')}
+              </Button>
+            </Dialog.Actions>
+          )}
+        </Dialog>
+      </Portal>
     </>
   );
 }
@@ -431,7 +585,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerButtons: { flexDirection: 'row' },
+  exportProgress: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  exportHint: { flex: 1, color: Colors.textSecondary },
+  exportFileName: { color: Colors.textSecondary },
   headerCard: { marginBottom: 16 },
   headerContent: { alignItems: 'center', paddingVertical: 16 },
   petEmoji: { fontSize: 64, marginBottom: 8 },
