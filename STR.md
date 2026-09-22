@@ -16,7 +16,7 @@
 
 `TC-<MODULE>-<TYPE>-<NNN>`
 
-- **MODULE:** AUTH, FAM, PET, DASH, REM, MED, VAC, TRT, APT, WGT, FOOD, DOC, AI, SET, NOTIF, I18N, SEC, DATA, E2E, SMOKE
+- **MODULE:** AUTH, FAM, PET, DASH, REM, MED, VAC, TRT, APT, WGT, FOOD, DOC, EXP, AI, SET, NOTIF, I18N, SEC, DATA, E2E, SMOKE
 - **TYPE:** FUNC (functional), NEG (negative), BOUND (boundary), EDGE (edge case), ERR (error handling), INT (integration), UI, VAL (validation)
 
 Priority: **P1** Critical · **P2** High · **P3** Medium · **P4** Low
@@ -40,6 +40,7 @@ Severity if failed: **Critical / High / Medium / Low**
 | Weight | CRUD / Chart / Trend | ✔ | ✔ | ✔ | ✔ | ✔ | – | N/A | ✔ | Covered |
 | Food | Add/Edit / Chart / Totals | ✔ | ✔ | ✔ | ✔ | ✔ | – | N/A | ✔ | Partially (no delete) |
 | Medical File | Upload / Open / Delete | ✔ | ✔ | ✔ | ✔ | ✔ | – | N/A | ✔ | Covered |
+| PDF Export | Generate / Share / Print / i18n | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | Covered |
 | AI Assistant | Chat / Context / Errors | ✔ | ✔ | ✔ | ✔ | ✔ | – | ✔ | N/A | Covered |
 | Settings | Language / Prefs / Share | ✔ | – | – | ✔ | ✔ | – | N/A | ✔ | Covered |
 | Notifications | Local / Cloud / Quiet hours | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | N/A | ✔ | Partially (device-dependent) |
@@ -319,10 +320,18 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 - **Steps:** Open an inactive/deceased pet → restore icon → confirm.
 - **Expected Result:** Pet returns to Active. Firestore: `isActive: true`, `deceased: false`, and the `deathDate` field is **deleted** (not just blanked).
 
-### TC-PET-UI-001 — Header actions differ by pet state
+### TC-PET-UI-001 — Overflow menu actions differ by pet state
 - **Priority:** P3 · **Severity:** Low · **Type:** UI / Edge
-- **Steps:** Compare header icons for an active vs. an inactive pet profile.
-- **Expected Result:** Active pet shows edit + deceased + delete; inactive/deceased pet shows edit + restore (no delete/deceased).
+- **Note:** Updated for the overflow menu that replaced the three separate header icons when the PDF export was added.
+- **Steps:**
+  1. Open an **active** pet profile.
+  2. Verify the header shows a single three-dot (`dots-vertical`) icon and no other action icons.
+  3. Tap it and record the menu items.
+  4. Repeat for an **inactive/deceased** pet.
+- **Expected Result:**
+  - Active pet: Edit profile · Export Medical File · Mark deceased · Delete pet (Delete rendered in the danger colour).
+  - Inactive/deceased pet: Edit profile · Export Medical File · Reactivate — no Delete and no Mark deceased.
+  - The menu closes after any item is chosen.
 
 ### TC-PET-EDGE-003 — Open a non-existent / just-deleted pet id
 - **Priority:** P3 · **Severity:** Low · **Type:** Edge
@@ -791,7 +800,273 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 13. AI Assistant Module (AI)
+# 13. Medical File PDF Export Module (EXP)
+
+> **Blocking precondition for every EXP case:** the installed build must include `expo-print`, `expo-sharing`, and `expo-file-system`. These are native modules; a dev client or APK produced before they were added will show the "export modules are not installed" alert and no case below can be executed. Confirm the build is current before starting.
+>
+> **Reference data:** the seed pets defined in [STP.md](STP.md) §32 — `FullPet`, `EmptyPet`, `OnePointPet`, `FlatPet`, `BulkPet`, `LongTextPet`.
+>
+> **How to inspect the PDF:** generate, then either Share → save to Drive/Files and open in a PDF viewer, or use Print → "Save as PDF". Read the document as a human; byte-level PDF inspection is out of scope.
+
+## 13.1 Entry Point
+
+### TC-EXP-UI-001 — Export action is reachable from the pet profile
+- **Priority:** P2 · **Severity:** Medium · **Type:** UI / Functional
+- **Preconditions:** Logged in; `FullPet` exists.
+- **Steps:**
+  1. Open `FullPet`'s profile.
+  2. Tap the three-dot icon in the header.
+  3. Locate the "Export Medical File" item.
+- **Expected Result:** The menu contains an "Export Medical File" item with a PDF icon, positioned directly below "Edit profile". Tapping it closes the menu and opens the export dialog.
+
+### TC-EXP-UI-002 — Progress dialog appears while generating
+- **Priority:** P3 · **Severity:** Low · **Type:** UI
+- **Steps:** Trigger the export on `FullPet` and observe the dialog without interacting.
+- **Expected Result:** A dialog titled with the "generating" string shows a spinner and a hint naming the pet. The dialog cannot be dismissed by tapping outside while generating. When generation finishes, the title changes to the "ready" string, the spinner is replaced by the filename, and Cancel / Print / Share buttons appear.
+
+### TC-EXP-UI-003 — Export is available for an inactive/deceased pet
+- **Priority:** P3 · **Severity:** Medium · **Type:** UI / Edge
+- **Preconditions:** A pet marked deceased with a death date.
+- **Steps:** Open its profile → three-dot menu → Export Medical File.
+- **Expected Result:** The export runs normally. The cover shows the "deceased" chip and the identity table's Status row reads "deceased · <death date>".
+
+### TC-EXP-NEG-001 — Missing native modules are reported, not crashed
+- **Priority:** P2 · **Severity:** High · **Type:** Negative / Error Handling
+- **Preconditions:** A build that does **not** include `expo-print` (e.g., the previous release APK).
+- **Steps:** Open a pet profile → three-dot menu → Export Medical File.
+- **Expected Result:** An alert appears with the "export modules are not installed" title and a hint naming the `npx expo install` command. The app does not crash and remains usable.
+
+## 13.2 Content Accuracy — Full Pet
+
+### TC-EXP-FUNC-001 — Cover page matches the pet profile
+- **Priority:** P1 · **Severity:** High · **Type:** Functional / Positive
+- **Preconditions:** `FullPet` has a photo, breed, colour, microchip number, birthdate and is neutered.
+- **Steps:**
+  1. Export `FullPet` and open the PDF.
+  2. Compare page 1 against the pet profile screen and against the Firestore document.
+- **Expected Result:** The cover shows:
+  - the pet photo as a circular image (not the emoji);
+  - name, species label, and breed;
+  - chips for sex, age, neutered, and "active";
+  - the pet document id and the family name;
+  - an identity table containing species, breed, sex, birthdate + age, colour, neutered yes/no, **microchip number**, and status + created date.
+  - Every value matches Firestore exactly.
+
+### TC-EXP-FUNC-002 — Snapshot tiles are correct
+- **Priority:** P2 · **Severity:** High · **Type:** Functional
+- **Steps:** On the cover, check the four summary tiles against the app screens.
+- **Expected Result:**
+  - *Latest weight* = the newest weight record, with the signed delta against the previous reading (green when gaining, red when losing).
+  - *Active medications* = the count of medications with `isActive == true`, with "of N on record" using the total including discontinued ones.
+  - *Next vaccine* = the soonest future `nextDueDate` across vaccines, with a correct day count and pill colour.
+  - *Next appointment* = the soonest `scheduled` appointment dated today or later, subtitled with vet · clinic.
+
+### TC-EXP-FUNC-003 — Overdue and upcoming alert boxes
+- **Priority:** P1 · **Severity:** High · **Type:** Functional
+- **Preconditions:** `FullPet` has one treatment overdue by a known number of days and one vaccine due within 30 days.
+- **Steps:** Read the two alert boxes on the cover.
+- **Expected Result:** A red "Overdue items" box lists the treatment with its due date and the correct overdue day count. An orange "Due in the next 30 days" box lists the vaccine with the correct remaining day count. Items are sorted by due date.
+
+### TC-EXP-FUNC-004 — Medications are correct after `isActive` filtering
+- **Priority:** P1 · **Severity:** High · **Type:** Functional
+- **Preconditions:** `FullPet` has ≥2 active and ≥2 discontinued medications.
+- **Steps:** Compare the two medication tables against Firestore.
+- **Expected Result:** Two separate tables appear — "Active medications" and "Discontinued medications". **Every** medication in Firestore appears in exactly one of them. The active table's last column shows the next dose date plus the reminder times underneath; the discontinued table's last column shows the end date. Type pills read regular/temporary/supplement with the correct colour.
+
+### TC-EXP-FUNC-005 — Vaccine table includes fields the app never displays
+- **Priority:** P2 · **Severity:** Medium · **Type:** Functional
+- **Steps:** Compare the vaccine table against Firestore, paying attention to `batchNumber` and `clinic`.
+- **Expected Result:** Columns for vaccine, date, next due, status, veterinarian, clinic and batch number are all populated. `batchNumber` and `clinic` are present in the PDF even though the vaccines screen does not render them.
+
+### TC-EXP-FUNC-006 — Status pills use the same thresholds as the app
+- **Priority:** P2 · **Severity:** Medium · **Type:** Functional
+- **Steps:** For each vaccine and treatment row, compare the pill against the status colour on the corresponding app screen.
+- **Expected Result:** Overdue → red; due today → orange "Today"; 1–30 days → orange; more than 30 days → green; no next-due date → grey "Historic". Colours match the vaccines screen.
+
+### TC-EXP-FUNC-007 — Appointments split into scheduled and history
+- **Priority:** P2 · **Severity:** Medium · **Type:** Functional
+- **Preconditions:** `FullPet` has a scheduled, a completed and a cancelled appointment.
+- **Steps:** Read the appointment sections.
+- **Expected Result:** A "Scheduled appointments" table lists only `scheduled` rows; an "Appointment history" table lists completed and cancelled rows. Both include **clinic phone** and a status pill (green completed, red cancelled, grey scheduled). The history rows show the completion notes.
+
+### TC-EXP-FUNC-008 — Document index lists uploads without embedding them
+- **Priority:** P3 · **Severity:** Low · **Type:** Functional
+- **Steps:** Read the Medical File section.
+- **Expected Result:** Every uploaded document appears with name, type pill (Image/PDF/Other), upload date and notes. The section heading states that the files themselves are not embedded. No image or PDF attachment is inlined into the report.
+
+### TC-EXP-FUNC-009 — Closing summary counts match the sections
+- **Priority:** P2 · **Severity:** Medium · **Type:** Functional / Data
+- **Steps:** Compare the summary table at the end against the row counts in each section.
+- **Expected Result:** Counts for weights, medications (with the active count in brackets), vaccines, treatments, appointments, food, and documents all match. The data range spans the earliest and latest dated record in the document. The disclaimer paragraph is present in the footer.
+
+### TC-EXP-FUNC-010 — Weight section: stats, chart and per-row deltas
+- **Priority:** P2 · **Severity:** Medium · **Type:** Functional
+- **Steps:** Compare the weight section against the weight screen.
+- **Expected Result:** Five tiles show current / first / minimum / maximum / total change with correct values and units. A line chart is rendered. The table lists every weighing newest-first, each with a signed delta against the previous (older) reading, coloured green for a gain and red for a loss; the oldest row's delta is an em dash.
+
+## 13.3 Localization
+
+### TC-EXP-FUNC-011 — Hebrew RTL output
+- **Priority:** P1 · **Severity:** High · **Type:** Functional / i18n
+- **Preconditions:** App language is Hebrew.
+- **Steps:** Export `FullPet` and inspect the PDF.
+- **Expected Result:** The document reads right-to-left: section header bars have their accent stripe on the right, table columns run right-to-left, and text is right-aligned. All headings, column headers and pill labels are in Hebrew. No English or untranslated keys (e.g. a literal `export.identity`) appear anywhere.
+
+### TC-EXP-FUNC-012 — English LTR output
+- **Priority:** P1 · **Severity:** High · **Type:** Functional / i18n
+- **Steps:** Settings → switch to English → restart the app → export `FullPet`.
+- **Expected Result:** The document reads left-to-right with the accent stripe on the left and left-aligned text. All strings are in English. Dates use the English locale. The species label is the English name.
+
+### TC-EXP-FUNC-013 — Plural forms are grammatical
+- **Priority:** P3 · **Severity:** Low · **Type:** Functional / i18n
+- **Preconditions:** A pet with exactly 1 record in one category and exactly 2 in another.
+- **Steps:** Read the record counts in the section headings, in both languages.
+- **Expected Result:** Hebrew selects the correct grammatical form for each count — the singular form for 1, the dual form for 2, and the plural form for 3 or more. A count of 1 must **not** render as the numeral "1" followed by the plural noun, and a count of 2 must not render as the numeral "2" followed by the plural noun. English reads "1 record" for 1 and "2 records" for 2. The same applies to the day counts in the status pills and alert boxes (the "in N days" and "N days overdue" strings).
+- **Reference:** the underlying keys are `export.recordCount_one` / `_two` / `_other`, `export.inDays_*` and `export.overdueDays_*` in `he.json` and `en.json`. A missing form shows the raw key instead of text — treat that as a FAIL.
+
+## 13.4 Empty, Boundary and Edge Cases
+
+### TC-EXP-EDGE-001 — Pet with no records at all
+- **Priority:** P2 · **Severity:** High · **Type:** Edge
+- **Preconditions:** `EmptyPet` — no records in any category, no photo.
+- **Steps:** Export `EmptyPet`.
+- **Expected Result:** The PDF generates successfully. The cover shows the **species emoji** instead of a photo. Every section heading is present, each followed by a localized "No records" line. The snapshot tiles show em dashes with "None". No alert boxes appear. No crash, no blank page, no `undefined` or `NaN` anywhere in the document.
+
+### TC-EXP-EDGE-002 — Pet with exactly one weight record
+- **Priority:** P3 · **Severity:** Low · **Type:** Boundary
+- **Preconditions:** `OnePointPet`.
+- **Steps:** Export and inspect the weight section.
+- **Expected Result:** No chart is drawn (a single point cannot form a line). The stat tiles and the one-row table render correctly, with an em dash in the change column.
+
+### TC-EXP-EDGE-003 — All weights identical
+- **Priority:** P3 · **Severity:** Medium · **Type:** Boundary
+- **Preconditions:** `FlatPet` — three weighings at the same value.
+- **Steps:** Export and inspect the chart.
+- **Expected Result:** The chart renders as a flat horizontal line positioned within the plot area — not collapsed onto an edge, not blank, and with no distorted or missing axis labels. The "total change" tile reads 0.
+
+### TC-EXP-BOUND-001 — Food is capped at 30 rows with a truthful total
+- **Priority:** P2 · **Severity:** Medium · **Type:** Boundary / Data
+- **Preconditions:** `BulkPet` with 200+ food records; device online.
+- **Steps:** Export and inspect the Food section.
+- **Expected Result:** The table contains at most 30 rows, showing the **most recent** meals. The section heading states "most recent 30 of N", where N is the true total in Firestore. The daily average and the per-type counts are derived from the 30 shown rows.
+
+### TC-EXP-BOUND-002 — Multi-page pagination
+- **Priority:** P1 · **Severity:** High · **Type:** Boundary / UI
+- **Preconditions:** `BulkPet`, producing a document of 6+ pages.
+- **Steps:** Open the PDF and scroll through every page, paying attention to page boundaries.
+- **Expected Result:**
+  - The cover occupies its own page; the next section starts on a new page.
+  - Where a table continues onto a following page, its **header row repeats**.
+  - No table row is split in half across a page break.
+  - No text is clipped at a page edge.
+  - The footer (pet name · generation date · disclaimer) appears on **every** page.
+  - **Note:** page numbers are intentionally absent — do not raise a defect for this (see STP.md §34).
+
+### TC-EXP-EDGE-004 — Long text and special characters
+- **Priority:** P2 · **Severity:** Medium · **Type:** Edge / Security
+- **Preconditions:** `LongTextPet` with notes and names containing `<`, `>`, `&`, `"`, `'`, emoji, and maximum-length strings.
+- **Steps:** Export and inspect the affected cells.
+- **Expected Result:** Special characters render **literally** as typed. No raw HTML tag is interpreted (a note containing `<b>x</b>` shows the tag text, not bold text). Long values wrap inside their cell rather than overflowing the page margin. The layout is not broken.
+
+### TC-EXP-EDGE-005 — Missing optional dates show an em dash
+- **Priority:** P3 · **Severity:** Low · **Type:** Edge
+- **Preconditions:** Records with no `nextDueDate`, no `endDate`, and a pet with no birthdate.
+- **Steps:** Export and inspect those cells.
+- **Expected Result:** Every empty date cell shows an em dash (—), never a blank cell and never the text "Invalid Date". A pet with no birthdate shows an em dash for birthdate and no age chip.
+
+### TC-EXP-EDGE-006 — Recurring medications stay out of the alert boxes
+- **Priority:** P3 · **Severity:** Low · **Type:** Edge
+- **Preconditions:** A pet whose only due item is an active daily medication (next dose tomorrow) and which has no due vaccine, treatment or appointment.
+- **Steps:** Export and read the cover.
+- **Expected Result:** Neither alert box appears — a daily medication is always "due tomorrow" and is deliberately excluded so it does not drown out real alerts. The medication is still listed in the active medications table with its next dose.
+
+## 13.5 Share and Print
+
+### TC-EXP-INT-001 — Share sheet delivers a readable file
+- **Priority:** P1 · **Severity:** High · **Type:** Integration
+- **Steps:**
+  1. Export `FullPet`.
+  2. Tap Share.
+  3. Choose Google Drive (then repeat for Gmail and WhatsApp).
+  4. Open the delivered file on the receiving side.
+- **Expected Result:** Android's share sheet opens. The attachment is named `medical-file_<pet>_<yyyy-MM-dd>.pdf` — a readable name, not a random cache string. The file opens as a valid PDF in the target app and its content matches what was generated.
+
+### TC-EXP-INT-002 — Print dialog renders A4 portrait
+- **Priority:** P1 · **Severity:** High · **Type:** Integration
+- **Steps:** Export `FullPet` → tap Print → inspect Android's print preview.
+- **Expected Result:** The print preview opens with the document laid out in **A4 portrait** (not US Letter). The page count matches the generated PDF. Choosing "Save as PDF" produces a file identical in content to the shared one.
+
+### TC-EXP-NEG-002 — Dismissing the share sheet is harmless
+- **Priority:** P3 · **Severity:** Low · **Type:** Negative
+- **Steps:** Export → Share → press Back without choosing a target.
+- **Expected Result:** Control returns to the export dialog (or the profile screen) with no error alert. The export can be shared again without regenerating.
+
+### TC-EXP-NEG-003 — Share unavailable on the device
+- **Priority:** P4 · **Severity:** Low · **Type:** Negative
+- **Preconditions:** A device/emulator where `Sharing.isAvailableAsync()` returns false.
+- **Steps:** Export and inspect the dialog buttons.
+- **Expected Result:** The Share button is disabled; Print and Cancel remain usable. No crash.
+
+## 13.6 Error Handling and Offline
+
+### TC-EXP-ERR-001 — Export while offline
+- **Priority:** P2 · **Severity:** High · **Type:** Error Handling / Edge
+- **Preconditions:** `FullPet` was opened online at least once so Firestore's local cache is warm. Enable airplane mode.
+- **Steps:** Export `FullPet` and inspect the PDF.
+- **Expected Result:** The export **succeeds** from cached Firestore data. The pet photo falls back to the species emoji (it cannot be downloaded). The Heebo web font falls back to the device's Hebrew font — the layout may shift slightly, which is expected. The food total may under-report because the server-side count is unavailable. No crash and no error alert.
+
+### TC-EXP-ERR-002 — Pet photo URL returns 404
+- **Priority:** P3 · **Severity:** Medium · **Type:** Error Handling
+- **Preconditions:** Delete the pet's photo object in Firebase Storage while leaving `photoUrl` set on the Firestore document.
+- **Steps:** Export the pet.
+- **Expected Result:** The export completes. The cover shows the species emoji instead of the photo. No error alert, no blank or broken-image box.
+
+### TC-EXP-ERR-003 — Firestore permission denied mid-export
+- **Priority:** P3 · **Severity:** Medium · **Type:** Error Handling / Security
+- **Preconditions:** Temporarily tighten `firestore.rules` to deny reads on one sub-collection.
+- **Steps:** Attempt an export.
+- **Expected Result:** An alert with the "could not generate the medical file" title is shown, the progress dialog closes, and the app stays usable. No partial or corrupt PDF is offered to the user. **Restore the rules afterwards.**
+
+### TC-EXP-EDGE-007 — Repeated export on the same day
+- **Priority:** P3 · **Severity:** Low · **Type:** Edge
+- **Steps:** Export the same pet three times in a row without leaving the screen, then share the last result.
+- **Expected Result:** Each export completes and overwrites the previous same-day file (the filename is date-based). No "file already exists" error, no accumulation of stale files being shared, and the shared file reflects the most recent data.
+
+### TC-EXP-EDGE-008 — Data changed between exports is reflected
+- **Priority:** P2 · **Severity:** Medium · **Type:** Edge / Data
+- **Steps:** Export a pet → add a new weight record → export again.
+- **Expected Result:** The second PDF contains the new record, an updated latest-weight tile, and an updated record count. The export reads fresh data each time rather than reusing a cached report.
+
+## 13.7 Security
+
+### TC-EXP-SEC-001 — Export contains only the current family's data
+- **Priority:** P1 · **Severity:** Critical · **Type:** Security / Authorization
+- **Preconditions:** Family A and Family B each have pets with distinct, recognizable names and records.
+- **Steps:** Log in as the Family A owner, export a Family A pet, and read the entire PDF.
+- **Expected Result:** No pet, record, family name, or user from Family B appears anywhere in the document. The family name on the cover is Family A's.
+
+### TC-EXP-SEC-002 — A second family member exports the same pet
+- **Priority:** P2 · **Severity:** Medium · **Type:** Security / Integration
+- **Preconditions:** Owner and spouse share one family.
+- **Steps:** Export the same pet from both accounts and compare the documents.
+- **Expected Result:** Both exports succeed and contain identical records — family scoping is by family, not by the creating user. Records created by the other member are included.
+
+## 13.8 End-to-End
+
+### TC-EXP-E2E-001 — Vet-visit journey
+- **Priority:** P1 · **Severity:** High · **Type:** End-to-End
+- **Steps:**
+  1. Register a new owner and create a family.
+  2. Add a pet with a photo, breed, colour and microchip number.
+  3. Add a weight, an active medication with a reminder, a vaccine with an auto-calculated next due date, a treatment, and a scheduled appointment.
+  4. Upload one document to the medical file.
+  5. Export the medical file and share it to Drive.
+  6. Open the PDF on a computer.
+- **Expected Result:** The PDF contains every item entered in step 3–4, with values matching what was typed. The cover flags the upcoming vaccine. The document is A4, readable, correctly laid out in the app's language, and suitable to hand to a veterinarian.
+
+---
+
+# 14. AI Assistant Module (AI)
 
 ### TC-AI-FUNC-001 — Ask a question (all pets context)
 - **Priority:** P3 · **Severity:** Medium · **Type:** Functional / Integration
@@ -842,7 +1117,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 14. Settings Module (SET)
+# 15. Settings Module (SET)
 
 ### TC-SET-FUNC-001 — Toggle notification preference (per type)
 - **Priority:** P3 · **Severity:** Medium · **Type:** Functional / Data
@@ -871,7 +1146,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 15. Notifications Module (NOTIF)
+# 16. Notifications Module (NOTIF)
 
 > Local notification cases require a **physical Android device** with notification permission granted and Google Play Services (for FCM). Emulator cannot fully validate these.
 
@@ -925,7 +1200,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 16. i18n / RTL Module (I18N)
+# 17. i18n / RTL Module (I18N)
 
 ### TC-I18N-FUNC-001 — Default language is Hebrew (RTL)
 - **Priority:** P2 · **Severity:** Medium · **Type:** Functional / UI
@@ -944,7 +1219,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 17. Security / Data Isolation Module (SEC)
+# 18. Security / Data Isolation Module (SEC)
 
 ### TC-SEC-FUNC-001 — Family-scoped read access (rules)
 - **Priority:** P1 · **Severity:** Critical · **Type:** Security / Authorization
@@ -978,7 +1253,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 18. End-to-End Journeys (E2E)
+# 19. End-to-End Journeys (E2E)
 
 ### TC-E2E-001 — New owner: register → add pet → add medication → dashboard → mark done
 - **Priority:** P1 · **Severity:** Critical · **Type:** E2E / Happy Path
@@ -1017,7 +1292,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 19. Smoke Test Suite (SMOKE)
+# 20. Smoke Test Suite (SMOKE)
 
 ### TC-SMOKE-001 — Build acceptance smoke
 - **Priority:** P1 · **Severity:** Critical · **Type:** Smoke
@@ -1032,7 +1307,7 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 
 ---
 
-# 20. Data Integrity & Offline (DATA)
+# 21. Data Integrity & Offline (DATA)
 
 ### TC-DATA-FUNC-001 — Persistence across restart
 - **Priority:** P2 · **Severity:** High · **Type:** Data
@@ -1068,11 +1343,14 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 - AI assistant (function, context, errors, security).
 - Settings (language, prefs, share, logout), i18n/RTL.
 - Data integrity, offline queue, cross-member sync.
+- Medical file PDF export: content accuracy per section, A4 pagination, RTL/LTR, share + print, empty/flat/bulk/long-text datasets, offline and photo-failure fallbacks, family scoping.
 
 ### Partially Covered
 - **Notifications (device-dependent):** Local notification firing and FCM delivery cannot be validated on an emulator; require a physical device and a triggered/observed cloud run.
 - **Cloud function internals:** `sendDailyReminders` and `askPetAI` are verified through the app and manual console triggering, not through code-level automation.
 - **Food & Treatments:** Only add/edit (food) / add-only (treatments) are exposed; delete/edit gaps limit corrective flows.
+- **PDF export rendering:** Verified by human inspection of the produced document. Pixel-level layout regression and byte-level PDF structure are not checked. Rendering also depends on the device's WebView version, so results can differ slightly across Android versions — see TC-EXP-BOUND-002.
+- **PDF export on a stale build:** TC-EXP-NEG-001 requires an older APK that lacks the native modules; if one is not retained, this case cannot be executed.
 
 ### Not Covered / Gaps (Needs Product Decision)
 - **No edit or delete UI for Treatments** — a mistaken treatment cannot be corrected in-app. *(Feature gap.)*
@@ -1081,11 +1359,17 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 - **"Remember Me" stores the password in plaintext** in AsyncStorage. *(Security — needs review.)*
 - **Silent error-swallowing** (`catch(() => {})`, `catch { skip }`) in dashboard queries and save flows can hide missing composite indexes or failed writes; verify via Firestore during testing.
 - **Birth year has no range validation** (accepts `0000`/far-future), which can yield nonsensical age chips.
+- **PDF has no page numbers** — a deliberate limitation of Android's WebView print engine (no `@page` margin boxes, no `counter(page)`). Acceptable today; would need a different rendering path to change. *(Documented limitation, not a defect.)*
+- **Generated PDFs are not retained** — the report is written to the cache directory and offered for share/print, but is not uploaded to the pet's medical file. Re-issuing a past report means re-exporting with today's data. *(Product decision — the user explicitly chose not to auto-upload.)*
+- **Food history is capped at 30 rows** in the export while every other category is complete. A vet wanting the full feeding history cannot get it from the PDF. *(Product decision — revisit if requested.)*
+- **Medical document attachments are not embedded** — only an index of their names is included, so the PDF is not a self-contained substitute for the uploaded scans.
 
 ### Needs Clarification
 - **Language "Cancel"** in the restart dialog: whether the persisted language preference is reverted, or only the visual toggle — confirm intended behavior.
 - **Expected minimum password policy** beyond Firebase's default (6 chars) — confirm product requirement.
 - **Composite indexes** required for dashboard vaccine/treatment/appointment queries — confirm they are deployed (`firestore.indexes.json`), otherwise those items silently never appear.
+- **Food cap of 30 records** in the PDF — confirm this is the intended limit for a document handed to a veterinarian, or whether the full history should be included.
+- **Whether the exported PDF should be archived** into the pet's medical file automatically, so a report given to a vet can be retrieved later.
 
 ### Recommended Next Steps
 1. Confirm and deploy all required Firestore composite indexes; re-run dashboard/reminders integration cases.
@@ -1093,6 +1377,9 @@ Legend: ✔ Covered · – Not applicable / not separately covered · N/A Not ap
 3. Review "Remember Me" credential storage security.
 4. Execute the device-dependent notification suite on ≥1 physical Android device.
 5. Consider future automation for regression of due-date logic (`medicationUtils`, dashboard advancement) — high-value, deterministic, and already partially unit-tested.
+6. Produce a dev client / APK that includes `expo-print`, `expo-sharing` and `expo-file-system` before scheduling the EXP suite — every EXP case is blocked without it.
+7. Seed the six export-specific pets listed in [STP.md](STP.md) §32 (`FullPet`, `EmptyPet`, `OnePointPet`, `FlatPet`, `BulkPet`, `LongTextPet`); `BulkPet` needs bulk food records created via the Firebase Console.
+8. Run TC-EXP-BOUND-002 (pagination) on at least two Android versions, since the print output comes from the device's WebView rather than the app.
 
 ---
 

@@ -218,12 +218,56 @@ export interface FoodRecord {
   foodName: string;
   foodType: FoodType;
   amountGrams: number;
+  amountUnit?: string;        // 'gram' | 'cups' | 'pouch'
   feedingDate: Timestamp;
   notes?: string;
   recordedBy: string;
   createdAt: Timestamp;
 }
 ```
+
+---
+
+## MedicalDocument
+
+מסמכים רפואיים שהמשתמש מעלה (צילומים, תוצאות בדיקה, תעודות חיסון). נשמרים תחת
+`families/{familyId}/pets/{petId}/documents/{documentId}`, כשהקובץ עצמו יושב ב-Firebase Storage.
+
+```typescript
+export type DocumentFileType = 'image' | 'pdf' | 'other';
+
+export interface MedicalDocument {
+  id: string;
+  petId: string;
+  familyId: string;
+  name: string;
+  fileUrl: string;            // Firebase Storage download URL
+  fileType: DocumentFileType;
+  mimeType?: string;
+  notes?: string;
+  uploadedBy: string;
+  uploadedAt: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+---
+
+## שדות שמופיעים רק בייצוא ה-PDF
+
+חלק מהשדות נשמרים ב-Firestore אך אינם מוצגים באף מסך. ייצוא התיק הרפואי
+(`src/services/pdf/`) הוא הצרכן היחיד שלהם כרגע:
+
+| מודל | שדות |
+|---|---|
+| `Pet` | `color`, `microchipNumber`, `createdAt` |
+| `Vaccine` | `batchNumber`, `clinic` |
+| `Appointment` | `clinicPhone`, `duration` |
+| `Medication` | `administrationRoute`, וכן תרופות עם `isActive == false` |
+
+ה-PDF ממיר כל `Timestamp` ל-`Date` רגיל בשכבת `medicalReportData.ts`, כך ששאר
+המודולים נשארים חופשיים מתלות ב-Firestore.
 
 ---
 

@@ -204,3 +204,45 @@ service cloud.firestore {
 - `enableIndexedDbPersistence()` ב-web / `enablePersistence()` ב-mobile
 - בעת offline: קריאות מ-cache, כתיבות נשמרות ב-queue ומסתנכרנות בחזרה לאינטרנט
 - UI: אינדיקטור "אין חיבור" ב-banner עליון
+
+---
+
+## 9. ייצוא תיק רפואי ל-PDF
+
+ייצוא של כל נתוני החיה למסמך A4 מקצועי, עם שיתוף והדפסה. נקודת הכניסה היא תפריט שלוש הנקודות במסך פרופיל החיה (`app/pet/[id].tsx`).
+
+### חלוקת המודולים (`src/services/pdf/`)
+
+| קובץ | תפקיד | טהור? |
+|---|---|---|
+| `types.ts` | מודלי תצוגה לדוח (`Date` רגיל, לא `Timestamp`) | ✔ |
+| `weightChartSvg.ts` | בניית גרף המשקל כ-SVG inline | ✔ |
+| `medicalReportHtml.ts` | בניית מסמך ה-HTML המלא בגודל A4 | ✔ |
+| `medicalReportData.ts` | איסוף חד-פעמי מ-Firestore + הטמעת התמונה | ✘ |
+| `exportMedicalReport.ts` | תזמור: איסוף → HTML → PDF → שיתוף/הדפסה | ✘ |
+
+**למה "טהור" חשוב:** תצורת jest בפרויקט היא `testEnvironment: "node"`, ולכן כל מודול שמייבא react-native או expo אינו בר-בדיקה. שני הבילדרים מקבלים מתאם `ReportLabels` מוזרק (`t`, `formatDate`, `formatDateTime`, `isRTL`, `lang`) במקום לייבא את i18n ישירות — המסך מעביר את הפונקציות האמיתיות, הבדיקות מעבירות stubs.
+
+### איסוף הנתונים
+
+`collectMedicalReportData()` קורא את שבע תת-הקולקציות ב-`Promise.all` אחד באמצעות `getRecords()` (ב-`firestore.ts`).
+
+**במכוון לא נעשה שימוש ב-hooks של `useHealthRecords.ts`** — הם מנויי `onSnapshot` חיים, ו-`useMedications` מסנן ל-`isActive == true` בעוד שהדוח צריך גם תרופות שהופסקו.
+
+- **מזון** מוגבל ל-30 הרשומות האחרונות (`FOOD_RECORD_LIMIT`) + ספירה כוללת דרך `getCountFromServer`. שאר הקטגוריות מיוצאות במלואן.
+- **תמונת החיה** מוטמעת כ-base64 data URI, כדי שה-PDF ייראה זהה גם ללא רשת. כל כשל נופל חזרה לאמוג'י של המין.
+- `getCountFromServer` דורש round trip לשרת ולכן נכשל offline — הקוד נופל חזרה לגודל העמוד שנקרא.
+
+### אילוצי הדפסה (Android WebView / Chromium)
+
+- חובה להעביר גודל דף במפורש: `printToFileAsync({ width: 595, height: 842 })`. ברירת המחדל היא US Letter.
+- `<thead>` חוזר אוטומטית כשטבלה נשברת בין עמודים; `tr { page-break-inside: avoid }` מונע חיתוך שורה.
+- אלמנט `position: fixed` חוזר בכל עמוד — כך מיושם ה-footer.
+- **אין מספרי עמודים.** מנוע ההדפסה של WebView אינו תומך ב-`@page` margin boxes או ב-`counter(page)`.
+- גופן Heebo נטען מ-Google Fonts; במצב offline המערכת נופלת חזרה לגופן העברי של המכשיר.
+
+### מודולים נייטיביים
+
+`expo-print`, `expo-sharing` ו-`expo-file-system` נדרשים ב-`require` עצל בתוך try/catch (אותה תבנית כמו `expo-document-picker` ב-`medical-file.tsx`), כך ש-dev client שנבנה לפני ההתקנה מציג הודעה ברורה במקום לקרוס.
+
+ב-SDK 54 הפונקציות `downloadAsync` / `copyAsync` / `readAsStringAsync` נמצאות ב-`expo-file-system/legacy`.
