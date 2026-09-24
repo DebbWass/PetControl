@@ -25,7 +25,9 @@
     "rememberMe": "Remember me",
     "enterEmailFirst": "Please enter your email first",
     "resetSentTitle": "Reset link sent",
-    "resetSentBody": "If an account exists for this email, a password reset link has been sent. Check your inbox (and your spam folder)."
+    "resetSentBody": "If an account exists for this email, a password reset link has been sent. Check your inbox (and your spam folder).",
+    "logoutConfirmTitle": "Log out",
+    "logoutConfirmMessage": "Log out of the app? Reminders will not be shown on this device until you log in again."
   },
   "family": {
     "create": "Create Family",
@@ -172,7 +174,15 @@
     "reminderEnabled": "Reminder for Next Treatment",
     "reminderDays": "Days Before Reminder",
     "dosage": "Dosage",
-    "noTreatments": "No treatments yet"
+    "noTreatments": "No treatments yet",
+    "edit": "Edit Treatment",
+    "deleteConfirm": "Delete treatment \"{{name}}\"?",
+    "done": "Done",
+    "notDone": "Not done",
+    "markDoneTitle": "Mark treatment as done",
+    "markDoneMessage": "\"{{name}}\" will be logged as done today, and the next treatment will be scheduled at the same interval.",
+    "notDoneTitle": "Mark treatment as not done",
+    "notDoneMessage": "\"{{name}}\" will be removed from the task list without logging a treatment. You can set a new date by editing the treatment."
   },
   "appointments": {
     "title": "Appointments",

@@ -20,12 +20,14 @@
     "registerButton": "יצירת חשבון",
     "noAccount": "אין לך חשבון?",
     "hasAccount": "יש לך חשבון?",
-    "logout": "יציאה",
+    "logout": "התנתקות",
     "forgotPassword": "שכחתי סיסמה",
     "rememberMe": "זכור אותי",
     "enterEmailFirst": "יש להזין כתובת דוא\"ל תחילה",
     "resetSentTitle": "נשלח קישור לאיפוס",
-    "resetSentBody": "אם קיים חשבון עם כתובת זו, יישלח אליו קישור לאיפוס הסיסמה. בדקו את תיבת הדוא\"ל (וגם את תיקיית הספאם)."
+    "resetSentBody": "אם קיים חשבון עם כתובת זו, יישלח אליו קישור לאיפוס הסיסמה. בדקו את תיבת הדוא\"ל (וגם את תיקיית הספאם).",
+    "logoutConfirmTitle": "התנתקות",
+    "logoutConfirmMessage": "להתנתק מהאפליקציה? תזכורות לא יוצגו במכשיר זה עד הכניסה הבאה."
   },
   "family": {
     "create": "יצירת משפחה",
@@ -172,7 +174,15 @@
     "reminderEnabled": "תזכורת לטיפול הבא",
     "reminderDays": "ימים לפני לתזכורת",
     "dosage": "מינון",
-    "noTreatments": "עדיין אין טיפולים"
+    "noTreatments": "עדיין אין טיפולים",
+    "edit": "עריכת טיפול",
+    "deleteConfirm": "למחוק את הטיפול \"{{name}}\"?",
+    "done": "בוצע",
+    "notDone": "לא בוצע",
+    "markDoneTitle": "סימון טיפול כבוצע",
+    "markDoneMessage": "הטיפול \"{{name}}\" יירשם כבוצע היום, והטיפול הבא יתוזמן באותו מרווח זמן.",
+    "notDoneTitle": "סימון טיפול כלא בוצע",
+    "notDoneMessage": "הטיפול \"{{name}}\" יוסר מרשימת המשימות בלי לרשום טיפול. אפשר לקבוע מועד חדש בעריכת הטיפול."
   },
   "appointments": {
     "title": "תורים",
@@ -261,12 +271,7 @@
     "version": "גרסה",
     "restartRequired": "נדרש אתחול",
     "restartMessage": "שינוי השפה ייכנס לתוקף לאחר אתחול האפליקציה.",
-    "restart": "אתחל עכשיו",
-    "notifications": "התראות",
-    "medications_notif": "תרופות",
-    "vaccines_notif": "חיסונים",
-    "treatments_notif": "טיפולים",
-    "appointments_notif": "תורים"
+    "restart": "אתחל עכשיו"
   },
   "ai": {
     "title": "עוזר AI",
