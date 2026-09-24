@@ -1,10 +1,10 @@
-import { View, StyleSheet, Alert, Share } from 'react-native';
+import { View, ScrollView, StyleSheet, Alert, Share } from 'react-native';
 import { Text, List, Switch, Divider, Button } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import * as Updates from 'expo-updates';
 import { setLanguage } from '../../src/i18n';
-import { logout } from '../../src/services/firebase/auth';
+import { useLogout } from '../../src/hooks/useLogout';
 import { useAuthStore } from '../../src/store/authStore';
 import { updateRecord } from '../../src/services/firebase/firestore';
 import { paths } from '../../src/services/firebase/firestore';
@@ -24,6 +24,7 @@ export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const family = useAuthStore((s) => s.family);
+  const confirmLogout = useLogout();
   const [isHebrew, setIsHebrew] = useState(i18n.language === 'he');
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(
     user?.notificationPrefs ?? DEFAULT_PREFS
@@ -92,7 +93,7 @@ export default function SettingsScreen() {
   const inviteCode = family?.inviteCode ?? null;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text variant="headlineMedium" style={styles.title}>
         {t('settings.title')}
       </Text>
@@ -166,19 +167,21 @@ export default function SettingsScreen() {
       <View style={styles.logoutContainer}>
         <Button
           mode="outlined"
-          onPress={logout}
+          icon="logout"
+          onPress={confirmLogout}
           textColor={Colors.danger}
           style={styles.logoutButton}
         >
           {t('auth.logout')}
         </Button>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingBottom: 32 },
   title: { padding: 16, paddingBottom: 8 },
   shareContainer: { paddingHorizontal: 16, paddingBottom: 8 },
   shareButton: { borderRadius: 8 },

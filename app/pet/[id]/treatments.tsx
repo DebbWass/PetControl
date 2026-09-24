@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react';
-import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import {
   Text, FAB, Card, Chip, Button, TextInput, HelperText,
-  Dialog, Portal, SegmentedButtons, Switch, List,
+  Dialog, Portal, SegmentedButtons, Switch, List, IconButton,
 } from 'react-native-paper';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Timestamp, orderBy } from 'firebase/firestore';
+import { Timestamp, orderBy, deleteField } from 'firebase/firestore';
 import { format, parse, isValid } from 'date-fns';
-import { subscribeToCollection, addRecord, paths } from '../../../src/services/firebase/firestore';
+import {
+  subscribeToCollection, addRecord, updateRecord, deleteRecord, paths,
+} from '../../../src/services/firebase/firestore';
+import {
+  markTreatmentDone, dismissTreatmentDue, defaultIntervalDays,
+} from '../../../src/services/treatments';
 import { useAuthStore } from '../../../src/store/authStore';
 import { Colors } from '../../../src/constants/colors';
 import { Treatment, TreatmentCategory } from '../../../src/types';
@@ -25,7 +30,7 @@ function parseDateStr(s: string): Date | null {
 }
 
 function defaultNextDate(category: TreatmentCategory): string {
-  const days = category === 'deworming' ? 90 : category === 'heartworm' ? 30 : 30;
+  const days = defaultIntervalDays(category);
   const d = new Date();
   d.setDate(d.getDate() + days);
   return format(d, 'dd/MM/yyyy');
@@ -39,6 +44,7 @@ export default function TreatmentsScreen() {
 
   const [treatments, setTreatments] = useState<Treatment[]>([]);
   const [dialogVisible, setDialogVisible] = useState(false);
+  const [editingTreatment, setEditingTreatment] = useState<Treatment | null>(null);
 
   // Form fields
   const [product, setProduct] = useState('');
@@ -69,6 +75,7 @@ export default function TreatmentsScreen() {
   }, [familyId, petId]);
 
   function reset() {
+    setEditingTreatment(null);
     setProduct('');
     setCategory('flea_tick');
     setTreatmentDateInput(todayStr());
@@ -82,14 +89,89 @@ export default function TreatmentsScreen() {
     setError('');
   }
 
-  // When category changes, suggest a new next-due date
+  function openEdit(tr: Treatment) {
+    reset();
+    setEditingTreatment(tr);
+    setProduct(tr.productName);
+    setCategory(tr.category);
+    setNextCategory(tr.category);
+    setTreatmentDateInput(format(tr.treatmentDate.toDate(), 'dd/MM/yyyy'));
+    setDosageInput(tr.dosage ?? '');
+    setNotesInput(tr.notes ?? '');
+    setHasNextTreatment(!!tr.nextDueDate);
+    setNextDueDateInput(
+      tr.nextDueDate ? format(tr.nextDueDate.toDate(), 'dd/MM/yyyy') : defaultNextDate(tr.category)
+    );
+    setReminderEnabled(tr.nextDueDate ? tr.reminderEnabled : true);
+    setReminderDays(String(tr.reminderDaysBeforeDue ?? 7));
+    setDialogVisible(true);
+  }
+
+  function handleDelete(tr: Treatment) {
+    Alert.alert(
+      t('treatments.deleteConfirm', { name: tr.productName }),
+      undefined,
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => {
+            deleteRecord(paths.treatments(familyId, petId), tr.id).catch((e) =>
+              Alert.alert(t('common.error'), e?.message)
+            );
+          },
+        },
+      ]
+    );
+  }
+
+  function handleMarkDone(tr: Treatment) {
+    Alert.alert(
+      t('treatments.markDoneTitle'),
+      t('treatments.markDoneMessage', { name: tr.productName }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('treatments.done'),
+          onPress: () => {
+            markTreatmentDone(familyId, tr, user!.uid).catch((e) =>
+              Alert.alert(t('common.error'), e?.message)
+            );
+          },
+        },
+      ]
+    );
+  }
+
+  function handleNotDone(tr: Treatment) {
+    Alert.alert(
+      t('treatments.notDoneTitle'),
+      t('treatments.notDoneMessage', { name: tr.productName }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('treatments.notDone'),
+          style: 'destructive',
+          onPress: () => {
+            dismissTreatmentDue(familyId, tr).catch((e) =>
+              Alert.alert(t('common.error'), e?.message)
+            );
+          },
+        },
+      ]
+    );
+  }
+
+  // When category changes, suggest a new next-due date (new records only —
+  // editing must not silently move an existing due date)
   function handleCategoryChange(cat: TreatmentCategory) {
     setCategory(cat);
     setNextCategory(cat);
-    setNextDueDateInput(defaultNextDate(cat));
+    if (!editingTreatment) setNextDueDateInput(defaultNextDate(cat));
   }
 
-  async function handleAdd() {
+  async function handleSave() {
     if (!product.trim()) { setError(t('common.missingFields', { fields: t('treatments.product') })); return; }
 
     const treatmentDate = parseDateStr(treatmentDateInput);
@@ -104,19 +186,32 @@ export default function TreatmentsScreen() {
 
     setLoading(true);
     try {
-      await addRecord<Treatment>(paths.treatments(familyId, petId), {
-        petId,
-        familyId,
+      const fields = {
         category,
         productName: product.trim(),
         treatmentDate: Timestamp.fromDate(treatmentDate),
-        nextDueDate: nextDueTimestamp,
-        dosage: dosageInput.trim() || undefined,
-        notes: notesInput.trim() || undefined,
         reminderEnabled: hasNextTreatment && reminderEnabled,
         reminderDaysBeforeDue: hasNextTreatment && reminderEnabled ? (parseInt(reminderDays, 10) || 7) : 7,
-        createdBy: user!.uid,
-      });
+      };
+      if (editingTreatment) {
+        // Cleared optional fields must be removed explicitly — updateRecord drops undefined
+        await updateRecord<Treatment>(paths.treatments(familyId, petId), editingTreatment.id, {
+          ...fields,
+          nextDueDate: nextDueTimestamp ?? deleteField(),
+          dosage: dosageInput.trim() || deleteField(),
+          notes: notesInput.trim() || deleteField(),
+        } as unknown as Partial<Treatment>);
+      } else {
+        await addRecord<Treatment>(paths.treatments(familyId, petId), {
+          ...fields,
+          petId,
+          familyId,
+          nextDueDate: nextDueTimestamp,
+          dosage: dosageInput.trim() || undefined,
+          notes: notesInput.trim() || undefined,
+          createdBy: user!.uid,
+        });
+      }
       setDialogVisible(false);
       reset();
     } catch (e: any) {
@@ -138,8 +233,13 @@ export default function TreatmentsScreen() {
                 <Card.Title
                   title={tr.productName}
                   subtitle={`${formatDate(tr.treatmentDate)}${tr.nextDueDate ? ` → ${t('treatments.nextDue')}: ${formatDate(tr.nextDueDate)}` : ''}`}
+                  subtitleNumberOfLines={2}
                   right={() => (
-                    <Chip compact style={styles.chip}>{t(`treatments.${tr.category}`)}</Chip>
+                    <View style={styles.cardActions}>
+                      <Chip compact style={styles.chip}>{t(`treatments.${tr.category}`)}</Chip>
+                      <IconButton icon="pencil" size={18} onPress={() => openEdit(tr)} />
+                      <IconButton icon="delete" size={18} iconColor={Colors.danger} onPress={() => handleDelete(tr)} />
+                    </View>
                   )}
                 />
                 {(tr.dosage || tr.notes) ? (
@@ -147,6 +247,25 @@ export default function TreatmentsScreen() {
                     {tr.dosage ? <Text style={styles.subText}>{t('treatments.dosage')}: {tr.dosage}</Text> : null}
                     {tr.notes ? <Text style={styles.subText}>{tr.notes}</Text> : null}
                   </Card.Content>
+                ) : null}
+                {tr.nextDueDate ? (
+                  <Card.Actions>
+                    <Button
+                      icon="close-circle-outline"
+                      textColor={Colors.danger}
+                      onPress={() => handleNotDone(tr)}
+                    >
+                      {t('treatments.notDone')}
+                    </Button>
+                    <Button
+                      icon="check-circle-outline"
+                      mode="contained"
+                      buttonColor={Colors.success}
+                      onPress={() => handleMarkDone(tr)}
+                    >
+                      {t('treatments.done')}
+                    </Button>
+                  </Card.Actions>
                 ) : null}
               </Card>
             ))
@@ -157,7 +276,7 @@ export default function TreatmentsScreen() {
 
         <Portal>
           <Dialog visible={dialogVisible} onDismiss={() => { setDialogVisible(false); reset(); }}>
-            <Dialog.Title>{t('treatments.add')}</Dialog.Title>
+            <Dialog.Title>{editingTreatment ? t('treatments.edit') : t('treatments.add')}</Dialog.Title>
             <KeyboardAvoidingView behavior={Platform.OS === 'android' ? 'padding' : 'height'}>
             <Dialog.ScrollArea style={styles.scrollArea}>
               <ScrollView keyboardShouldPersistTaps="handled">
@@ -274,7 +393,7 @@ export default function TreatmentsScreen() {
             </KeyboardAvoidingView>
             <Dialog.Actions>
               <Button onPress={() => { setDialogVisible(false); reset(); }}>{t('common.cancel')}</Button>
-              <Button onPress={handleAdd} loading={loading} textColor={Colors.primary}>{t('common.save')}</Button>
+              <Button onPress={handleSave} loading={loading} textColor={Colors.primary}>{t('common.save')}</Button>
             </Dialog.Actions>
           </Dialog>
         </Portal>
@@ -291,7 +410,8 @@ const styles = StyleSheet.create({
   fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: Colors.primary },
   input: { marginBottom: 8 },
   segment: { marginBottom: 12 },
-  chip: { marginRight: 8, backgroundColor: Colors.primaryLight },
+  chip: { backgroundColor: Colors.primaryLight },
+  cardActions: { flexDirection: 'row', alignItems: 'center' },
   sectionLabel: { color: Colors.textSecondary, fontSize: 12, marginBottom: 6, marginTop: 4 },
   subText: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
   scrollArea: { maxHeight: 500 },

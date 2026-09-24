@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
 import { he as heLocale, enUS } from 'date-fns/locale';
 import { useDashboard, DashboardTask, markMedicationDone } from '../../src/hooks/useDashboard';
+import { TreatmentTaskActions } from '../../src/components/TreatmentTaskActions';
 import { useActivePets } from '../../src/hooks/usePets';
 import { useAuthStore } from '../../src/store/authStore';
 import { Colors } from '../../src/constants/colors';
@@ -35,7 +36,7 @@ export default function RemindersScreen() {
   const isEmpty = !isLoading && today.length === 0 && upcoming7.length === 0 && overdue.length === 0;
 
   function renderTask(task: DashboardTask) {
-    const key = `${task.petId}-${task.type}-${task.scheduledDate.getTime()}`;
+    const key = `${task.petId}-${task.type}-${task.recordId}-${task.scheduledDate.getTime()}`;
     const timeStr = task.timeLabel ? ` • ${task.timeLabel}` : '';
     return (
       <List.Item
@@ -57,6 +58,9 @@ export default function RemindersScreen() {
                   refresh();
                 }}
               />
+            )}
+            {task.type === 'treatment' && (
+              <TreatmentTaskActions task={task} onChanged={refresh} />
             )}
             <List.Icon {...props} icon="chevron-right" />
           </View>

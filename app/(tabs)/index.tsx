@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useActivePets } from '../../src/hooks/usePets';
 import { useAuthStore } from '../../src/store/authStore';
 import { useDashboard, DashboardTask, markMedicationDone } from '../../src/hooks/useDashboard';
+import { TreatmentTaskActions } from '../../src/components/TreatmentTaskActions';
+import { useLogout } from '../../src/hooks/useLogout';
 import { Colors } from '../../src/constants/colors';
 import { SPECIES_MAP } from '../../src/constants/species';
 
@@ -23,9 +25,10 @@ export default function HomeScreen() {
   const user = useAuthStore((s) => s.user);
   const pets = useActivePets();
   const { today, upcoming7, overdue, isLoading, refresh } = useDashboard();
+  const confirmLogout = useLogout();
 
   function renderTask(task: DashboardTask) {
-    const key = `${task.petId}-${task.type}-${task.scheduledDate.getTime()}`;
+    const key = `${task.petId}-${task.type}-${task.recordId}-${task.scheduledDate.getTime()}`;
 
     let desc: string;
     if (task.daysUntil === 0) {
@@ -62,6 +65,9 @@ export default function HomeScreen() {
                 }}
               />
             )}
+            {task.type === 'treatment' && (
+              <TreatmentTaskActions task={task} onChanged={refresh} />
+            )}
             <List.Icon {...props} icon="chevron-right" />
           </View>
         )}
@@ -72,9 +78,17 @@ export default function HomeScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text variant="headlineMedium" style={styles.title}>
-        {t('dashboard.title')} {user?.displayName} 👋
-      </Text>
+      <View style={styles.header}>
+        <Text variant="headlineMedium" style={styles.title}>
+          {t('dashboard.title')} {user?.displayName} 👋
+        </Text>
+        <IconButton
+          icon="logout"
+          iconColor={Colors.textSecondary}
+          onPress={confirmLogout}
+          accessibilityLabel={t('auth.logout')}
+        />
+      </View>
 
       {/* Overdue tasks */}
       {overdue.length > 0 && (
@@ -146,7 +160,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16, paddingBottom: 32 },
-  title: { marginBottom: 16, marginTop: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 8 },
+  title: { flex: 1 },
   card: { marginBottom: 12 },
   overdueCard: { borderLeftWidth: 4, borderLeftColor: Colors.danger },
   loader: { marginVertical: 12 },

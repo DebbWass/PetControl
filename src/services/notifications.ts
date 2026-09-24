@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { AndroidImportance, SchedulableTriggerInputTypes } from 'expo-notifications';
-import { arrayUnion, updateDoc, doc } from 'firebase/firestore';
+import { arrayUnion, arrayRemove, updateDoc, doc } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from './firebase/config';
 import { paths } from './firebase/firestore';
@@ -108,6 +108,25 @@ export async function saveTokenToFirestore(
 ): Promise<void> {
   const memberRef = doc(db, paths.members(familyId), uid);
   await updateDoc(memberRef, { fcmTokens: arrayUnion(token) });
+}
+
+/**
+ * Called on logout: stop this device from receiving the family's reminders.
+ * Removes the device's FCM token from the member doc (must run while still
+ * signed in) and cancels every locally scheduled notification.
+ */
+export async function clearDeviceNotifications(uid: string, familyId: string): Promise<void> {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (Device.isDevice && status === 'granted') {
+      const token = await Notifications.getDevicePushTokenAsync();
+      await updateDoc(doc(db, paths.members(familyId), uid), {
+        fcmTokens: arrayRemove(token.data as string),
+      });
+    }
+  } catch { /* non-fatal */ }
+  await Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+  await AsyncStorage.removeItem(MED_NOTIF_MAP_KEY).catch(() => {});
 }
 
 /**

@@ -27,6 +27,8 @@ export interface DashboardTask {
   /** Frequency fields — present on medication tasks, used for mark-done advancement */
   frequencyValue?: number;
   frequencyUnit?: FrequencyUnit;
+  /** Full record — present on treatment tasks, used for mark-done / not-done */
+  treatment?: Treatment;
 }
 
 export interface DashboardData {
@@ -209,7 +211,7 @@ export function useDashboard(): DashboardData {
             )
           );
           treatSnap.docs.forEach((d) => {
-            const tr = d.data() as Treatment;
+            const tr = { id: d.id, ...d.data() } as Treatment;
             const dueDate = tr.nextDueDate?.toDate();
             if (!dueDate) return;
             const days = differenceInCalendarDays(dueDate, now);
@@ -218,6 +220,7 @@ export function useDashboard(): DashboardData {
               petId, petName: pet.name, type: 'treatment',
               label: tr.productName, scheduledDate: dueDate, daysUntil: days,
               route: route('treatments'),
+              treatment: tr,
             });
           });
         } catch { /* skip */ }
